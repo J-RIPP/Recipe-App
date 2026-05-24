@@ -23,7 +23,7 @@
 
     const SB_URL = "https://tkpwseiasagnzerodiwl.supabase.co";
     const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ";
-    const _p = atob("MDQxMg==");
+    const CORRECT_PIN = "0412";
     const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     const CATEGORIES = ["Breakfast","Lunch","Dinner","Snack","Dessert","Other"];
 
@@ -205,7 +205,7 @@
       }
 
       function handlePinSubmit() {
-        if (pin === _p) { setAuthed(true); }
+        if (pin === CORRECT_PIN) { setAuthed(true); }
         else { setPinError(true); setTimeout(() => setPinError(false), 800); }
       }
 
@@ -321,4 +321,4 @@
 
             {view === "library" && (
               <div>
-        
+    
