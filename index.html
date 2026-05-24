@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Our Recipes</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #111; font-family: Georgia, serif; }
+    input, select, textarea, button { font-family: Georgia, serif; outline: none; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const SB_URL = "https://tkpwseiasagnzerodiwl.supabase.co";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ";
+    const CORRECT_PIN = "0412";
+    const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    const CATEGORIES = ["Breakfast","Lunch","Dinner","Snack","Dessert","Other"];
+
+    function getMonday(d = new Date()) {
+      const copy = new Date(d);
+      const day = copy.getDay();
+      const diff = copy.getDate() - day + (day === 0 ? -6 : 1);
+      copy.setDate(diff);
+      return copy.toISOString().split("T")[0];
+    }
+
+    const H = {
+      "Content-Type": "application/json",
+      "apikey": SB_KEY,
+      "Authorization": `Bearer ${SB_KEY}`,
+      "Prefer": "return=representation",
+    };
+
+    async function sbGet(table, query = "") {
+      const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { headers: H });
+      return res.json();
+    }
+    async function sbPost(table, body) {
+      const res = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: H, body: JSON.stringify(body) });
+      return res.json();
+    }
+    async function sbPatch(table, query, body) {
+      const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { method: "PATCH", headers: H, body: JSON.stringify(body) });
+      return res.json();
+    }
+    async function sbDelete(table, query) {
+      await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { method: "DELETE", headers: H });
+    }
+
+    const s = {
+      pinScreen: { minHeight:"100vh", background:"#111", display:"flex", alignItems:"center", justifyContent:"center", padding:20 },
+      pinCard: { background:"#1a1a1a", borderRadius:24, padding:"40px 32px", maxWidth:320, width:"100%", textAlign:"center" },
+      pinLogo: { fontSize:48, marginBottom:8 },
+      pinTitle: { color:"#fff", fontSize:28, margin:"0 0 4px" },
+      pinSub: { color:"#888", fontSize:14, marginBottom:8 },
+      pinDot: { width:14, height:14, borderRadius:"50%", transition:"background 0.2s" },
+      pinGrid: { display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, margin:"0 auto 16px", maxWidth:220 },
+      pinBtn: { background:"#2a2a2a", border:"none", borderRadius:12, color:"#fff", fontSize:20, padding:"14px 0", cursor:"pointer" },
+      pinEnter: { background:"#e07b4a", border:"none", borderRadius:12, color:"#fff", fontSize:16, fontWeight:700, padding:"12px 40px", cursor:"pointer", width:"100%" },
+      app: { minHeight:"100vh", background:"#111", color:"#eee", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto", position:"relative" },
+      header: { background:"#1a1a1a", padding:"16px 20px", borderBottom:"1px solid #2a2a2a", position:"sticky", top:0, zIndex:10 },
+      headerTitle: { fontSize:20, fontWeight:700, color:"#fff" },
+      content: { flex:1, padding:"16px 16px 90px", overflowY:"auto" },
+      toast: { position:"fixed", top:20, left:"50%", transform:"translateX(-50%)", background:"#e07b4a", color:"#fff", padding:"10px 24px", borderRadius:20, fontSize:14, zIndex:100 },
+      searchInput: { width:"100%", background:"#1e1e1e", border:"1px solid #333", borderRadius:10, color:"#eee", padding:"10px 14px", fontSize:15, marginBottom:10 },
+      catRow: { display:"flex", gap:8, overflowX:"auto", paddingBottom:8, marginBottom:12 },
+      catBtn: { background:"#1e1e1e", border:"1px solid #333", borderRadius:20, color:"#aaa", padding:"6px 14px", fontSize:13, whiteSpace:"nowrap", cursor:"pointer" },
+      catBtnActive: { background:"#e07b4a", border:"1px solid #e07b4a", color:"#fff" },
+      empty: { color:"#666", textAlign:"center", marginTop:60, fontSize:15 },
+      recipeGrid: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 },
+      recipeCard: { background:"#1a1a1a", borderRadius:14, overflow:"hidden", cursor:"pointer", border:"1px solid #2a2a2a" },
+      recipeThumb: { width:"100%", height:110, objectFit:"cover" },
+      recipePlaceholder: { width:"100%", height:110, background:"#222", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 },
+      recipeCardBody: { padding:"10px 12px 12px" },
+      recipeCardCat: { fontSize:11, color:"#e07b4a", textTransform:"uppercase", letterSpacing:1, marginBottom:3 },
+      recipeCardTitle: { fontSize:14, color:"#fff", fontWeight:600, lineHeight:1.3 },
+      screen: { minHeight:"100vh", background:"#111", color:"#eee", maxWidth:480, margin:"0 auto", paddingBottom:40 },
+      detailHeader: { display:"flex", justifyContent:"space-between", padding:"14px 16px" },
+      backBtn: { background:"none", border:"none", color:"#aaa", fontSize:15, cursor:"pointer", padding:0 },
+      detailPhoto: { width:"100%", height:220, objectFit:"cover" },
+      detailBody: { padding:"16px 16px 40px" },
+      detailCat: { fontSize:11, color:"#e07b4a", textTransform:"uppercase", letterSpacing:1, marginBottom:6 },
+      detailTitle: { fontSize:26, color:"#fff", margin:"0 0 8px" },
+      detailLink: { color:"#e07b4a", fontSize:13, display:"block", marginBottom:16 },
+      sectionLabel: { fontSize:12, color:"#888", textTransform:"uppercase", letterSpacing:1.5, marginTop:20, marginBottom:10, borderBottom:"1px solid #2a2a2a", paddingBottom:6 },
+      listItem: { color:"#ddd", fontSize:15, marginBottom:6, lineHeight:1.5, display:"flex", gap:8 },
+      stepNum: { background:"#e07b4a", color:"#fff", borderRadius:"50%", width:22, height:22, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:12, flexShrink:0, marginTop:1 },
+      dayGrid: { display:"flex", gap:8, flexWrap:"wrap", marginBottom:20 },
+      dayBtn: { background:"#1e1e1e", border:"1px solid #333", borderRadius:8, color:"#aaa", padding:"8px 12px", fontSize:13, cursor:"pointer" },
+      dayBtnActive: { background:"#e07b4a", border:"1px solid #e07b4a", color:"#fff" },
+      cookBtn: { background:"#e07b4a", border:"none", borderRadius:12, color:"#fff", fontSize:16, fontWeight:700, padding:"14px 0", width:"100%", cursor:"pointer", marginTop:8 },
+      cookScreen: { minHeight:"100vh", background:"#0d0d0d", color:"#eee", maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column" },
+      cookHeader: { display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:"#1a1a1a" },
+      cookTitle: { fontSize:16, fontWeight:600, color:"#fff" },
+      cookBody: { flex:1, padding:"32px 20px 20px", display:"flex", flexDirection:"column" },
+      cookStepNum: { fontSize:13, color:"#e07b4a", textTransform:"uppercase", letterSpacing:2, marginBottom:16 },
+      cookStepText: { fontSize:22, color:"#fff", lineHeight:1.6, flex:1 },
+      cookNav: { display:"flex", gap:12, marginTop:32, marginBottom:24 },
+      cookNavBtn: { flex:1, background:"#1e1e1e", border:"1px solid #333", borderRadius:12, color:"#fff", fontSize:16, padding:"14px 0", cursor:"pointer" },
+      cookIngBox: { background:"#1a1a1a", borderRadius:14, padding:"14px 16px" },
+      cookIngTitle: { fontSize:12, color:"#888", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 },
+      cookIng: { color:"#ccc", fontSize:14, marginBottom:4 },
+      formWrap: { paddingBottom:40 },
+      formHeading: { color:"#fff", fontSize:22, marginBottom:16 },
+      uploadBox: { background:"#1a1a1a", border:"1px dashed #444", borderRadius:12, padding:16, marginBottom:16, textAlign:"center" },
+      uploadLabel: { color:"#aaa", fontSize:14, marginBottom:10 },
+      uploadBtn: { background:"#e07b4a", border:"none", borderRadius:8, color:"#fff", fontSize:14, fontWeight:600, padding:"8px 20px", cursor:"pointer", display:"inline-block" },
+      divider: { color:"#555", textAlign:"center", fontSize:13, margin:"16px 0" },
+      label: { display:"block", color:"#888", fontSize:12, textTransform:"uppercase", letterSpacing:1, marginBottom:6, marginTop:14 },
+      input: { width:"100%", background:"#1e1e1e", border:"1px solid #333", borderRadius:10, color:"#eee", padding:"10px 14px", fontSize:15 },
+      textarea: { width:"100%", background:"#1e1e1e", border:"1px solid #333", borderRadius:10, color:"#eee", padding:"10px 14px", fontSize:15, resize:"vertical" },
+      submitBtn: { background:"#e07b4a", border:"none", borderRadius:12, color:"#fff", fontSize:16, fontWeight:700, padding:"14px 0", width:"100%", cursor:"pointer", marginTop:20 },
+      plannerRow: { background:"#1a1a1a", borderRadius:12, padding:"12px 14px", marginBottom:10, display:"flex", alignItems:"center", gap:12 },
+      plannerDay: { color:"#e07b4a", fontSize:13, fontWeight:700, width:80, flexShrink:0 },
+      plannerRecipe: { flex:1, display:"flex", alignItems:"center", justifyContent:"space-between" },
+      plannerRecipeName: { color:"#fff", fontSize:14, cursor:"pointer", textDecoration:"underline" },
+      plannerRemove: { background:"none", border:"none", color:"#666", fontSize:16, cursor:"pointer" },
+      plannerEmpty: { flex:1 },
+      plannerSelect: { background:"#2a2a2a", border:"1px solid #444", borderRadius:8, color:"#aaa", padding:"6px 10px", fontSize:13, width:"100%" },
+      shopDayLabel: { fontSize:13, color:"#e07b4a", fontWeight:700, marginBottom:8, textTransform:"uppercase", letterSpacing:1 },
+      shopItem: { display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #1e1e1e", cursor:"pointer" },
+      shopCheck: { width:22, height:22, borderRadius:6, border:"2px solid #444", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:"#fff" },
+      shopCheckDone: { background:"#4caf50", border:"2px solid #4caf50" },
+      nav: { position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:"#1a1a1a", borderTop:"1px solid #2a2a2a", display:"flex", zIndex:20 },
+      navBtn: { flex:1, background:"none", border:"none", color:"#666", padding:"10px 0 14px", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 },
+      navBtnActive: { color:"#e07b4a" },
+      navIcon: { fontSize:20 },
+      navLabel: { fontSize:10, textTransform:"uppercase", letterSpacing:0.5 },
+    };
+
+    function App() {
+      const [pin, setPin] = useState("");
+      const [authed, setAuthed] = useState(false);
+      const [pinError, setPinError] = useState(false);
+      const [view, setView] = useState("library");
+      const [recipes, setRecipes] = useState([]);
+      const [weekPlan, setWeekPlan] = useState({});
+      const [selectedRecipe, setSelectedRecipe] = useState(null);
+      const [cookStep, setCookStep] = useState(0);
+      const [loading, setLoading] = useState(false);
+      const [shoppingChecked, setShoppingChecked] = useState({});
+      const [weekStart] = useState(getMonday());
+      const [search, setSearch] = useState("");
+      const [filterCat, setFilterCat] = useState("All");
+      const [form, setForm] = useState({ title:"", category:"Dinner", source_url:"", ingredients:"", steps:"", photo_url:"" });
+      const [formError, setFormError] = useState("");
+      const [uploadError, setUploadError] = useState("");
+      const [toast, setToast] = useState("");
+
+      useEffect(() => { if (authed) { fetchRecipes(); fetchWeekPlan(); } }, [authed]);
+
+      function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2500); }
+
+      async function fetchRecipes() {
+        const data = await sbGet("recipes", "order=created_at.desc");
+        setRecipes(Array.isArray(data) ? data : []);
+      }
+
+      async function fetchWeekPlan() {
+        const data = await sbGet("week_plan", `week_start=eq.${weekStart}&select=*,recipes(*)`);
+        const plan = {};
+        (Array.isArray(data) ? data : []).forEach(row => { plan[row.day] = row; });
+        setWeekPlan(plan);
+      }
+
+      async function saveRecipe(recipe) {
+        setLoading(true);
+        await sbPost("recipes", recipe);
+        setLoading(false);
+        showToast("Recipe saved!");
+        fetchRecipes();
+        setView("library");
+      }
+
+      async function deleteRecipe(id) {
+        await sbDelete("week_plan", `recipe_id=eq.${id}`);
+        await sbDelete("recipes", `id=eq.${id}`);
+        showToast("Recipe deleted");
+        fetchRecipes(); fetchWeekPlan();
+        setSelectedRecipe(null); setView("library");
+      }
+
+      async function assignDay(day, recipeId) {
+        const existing = weekPlan[day];
+        if (existing) await sbPatch("week_plan", `id=eq.${existing.id}`, { recipe_id: recipeId });
+        else await sbPost("week_plan", { day, recipe_id: recipeId, week_start: weekStart });
+        fetchWeekPlan();
+        showToast(`Assigned to ${day}!`);
+      }
+
+      async function unassignDay(day) {
+        const existing = weekPlan[day];
+        if (existing) { await sbDelete("week_plan", `id=eq.${existing.id}`); fetchWeekPlan(); }
+      }
+
+      function handlePinSubmit() {
+        if (pin === CORRECT_PIN) { setAuthed(true); }
+        else { setPinError(true); setTimeout(() => setPinError(false), 800); }
+      }
+
+      function handleFormSubmit() {
+        if (!form.title.trim()) { setFormError("Title is required"); return; }
+        saveRecipe({
+          title: form.title.trim(), category: form.category,
+          source_url: form.source_url.trim() || null, photo_url: form.photo_url.trim() || null,
+          ingredients: form.ingredients.split("\n").filter(l => l.trim()),
+          steps: form.steps.split("\n").filter(l => l.trim()),
+        });
+        setForm({ title:"", category:"Dinner", source_url:"", ingredients:"", steps:"", photo_url:"" });
+        setFormError("");
+      }
+
+      function handleJsonUpload(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            if (!data.title) { setUploadError("Invalid file — missing title."); return; }
+            saveRecipe({ title:data.title, category:data.category||"Dinner", source_url:data.source_url||null, photo_url:data.photo_url||null, ingredients:Array.isArray(data.ingredients)?data.ingredients:[], steps:Array.isArray(data.steps)?data.steps:[] });
+            setUploadError("");
+          } catch { setUploadError("Could not parse file."); }
+        };
+        reader.readAsText(file);
+      }
+
+      const filteredRecipes = recipes.filter(r =>
+        r.title.toLowerCase().includes(search.toLowerCase()) && (filterCat === "All" || r.category === filterCat)
+      );
+
+      if (!authed) return (
+        <div style={s.pinScreen}>
+          <div style={s.pinCard}>
+            <div style={s.pinLogo}>🍽️</div>
+            <h1 style={s.pinTitle}>Our Recipes</h1>
+            <p style={s.pinSub}>Enter PIN to continue</p>
+            <div style={{ display:"flex", gap:8, justifyContent:"center", margin:"20px 0" }}>
+              {[0,1,2,3].map(i => <div key={i} style={{ ...s.pinDot, background: pin.length > i ? "#e07b4a" : "#3a3a3a" }} />)}
+            </div>
+            <div style={s.pinGrid}>
+              {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i) => (
+                <button key={i} style={{ ...s.pinBtn, ...(k===""?{opacity:0,pointerEvents:"none"}:{}), ...(pinError?{background:"#5a1a1a"}:{}) }}
+                  onClick={() => { if(k==="⌫") setPin(p=>p.slice(0,-1)); else if(k!==""&&pin.length<4) setPin(p=>p+k); }}>{k}</button>
+              ))}
+            </div>
+            <button style={s.pinEnter} onClick={handlePinSubmit}>Enter</button>
+            {pinError && <p style={{ color:"#e07b4a", textAlign:"center", marginTop:8 }}>Wrong PIN</p>}
+          </div>
+        </div>
+      );
+
+      if (view === "cook" && selectedRecipe) {
+        const steps = selectedRecipe.steps || [];
+        return (
+          <div style={s.cookScreen}>
+            <div style={s.cookHeader}>
+              <button style={s.backBtn} onClick={() => { setView("library"); setCookStep(0); }}>← Back</button>
+              <span style={s.cookTitle}>{selectedRecipe.title}</span>
+            </div>
+            <div style={s.cookBody}>
+              <div style={s.cookStepNum}>Step {cookStep+1} of {steps.length}</div>
+              <div style={s.cookStepText}>{steps[cookStep]}</div>
+              <div style={s.cookNav}>
+                <button style={{ ...s.cookNavBtn, opacity:cookStep===0?0.3:1 }} disabled={cookStep===0} onClick={() => setCookStep(c=>c-1)}>← Prev</button>
+                {cookStep < steps.length-1
+                  ? <button style={s.cookNavBtn} onClick={() => setCookStep(c=>c+1)}>Next →</button>
+                  : <button style={{ ...s.cookNavBtn, background:"#4caf50" }} onClick={() => { setView("library"); setCookStep(0); }}>Done ✓</button>}
+              </div>
+              <div style={s.cookIngBox}>
+                <div style={s.cookIngTitle}>Ingredients</div>
+                {(selectedRecipe.ingredients||[]).map((ing,i) => <div key={i} style={s.cookIng}>• {ing}</div>)}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (view === "detail" && selectedRecipe) return (
+        <div style={s.screen}>
+          <div style={s.detailHeader}>
+            <button style={s.backBtn} onClick={() => setView("library")}>← Back</button>
+            <button style={{ ...s.backBtn, color:"#e07b4a" }} onClick={() => deleteRecipe(selectedRecipe.id)}>Delete</button>
+          </div>
+          {selectedRecipe.photo_url && <img src={selectedRecipe.photo_url} alt="" style={s.detailPhoto} />}
+          <div style={s.detailBody}>
+            <div style={s.detailCat}>{selectedRecipe.category}</div>
+            <h2 style={s.detailTitle}>{selectedRecipe.title}</h2>
+            {selectedRecipe.source_url && <a href={selectedRecipe.source_url} target="_blank" style={s.detailLink}>View original source ↗</a>}
+            <div style={s.sectionLabel}>Ingredients</div>
+            {(selectedRecipe.ingredients||[]).map((ing,i) => <div key={i} style={s.listItem}>• {ing}</div>)}
+            <div style={s.sectionLabel}>Steps</div>
+            {(selectedRecipe.steps||[]).map((step,i) => <div key={i} style={s.listItem}><span style={s.stepNum}>{i+1}</span> {step}</div>)}
+            <div style={s.sectionLabel}>Add to week plan</div>
+            <div style={s.dayGrid}>
+              {DAYS.map(day => (
+                <button key={day} style={{ ...s.dayBtn, ...(weekPlan[day]?.recipe_id===selectedRecipe.id?s.dayBtnActive:{}) }}
+                  onClick={() => assignDay(day, selectedRecipe.id)}>{day.slice(0,3)}</button>
+              ))}
+            </div>
+            <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
+          </div>
+        </div>
+      );
+
+      return (
+        <div style={s.app}>
+          {toast && <div style={s.toast}>{toast}</div>}
+          <div style={s.header}><span style={s.headerTitle}>🍽️ Our Recipes</span></div>
+          <div style={s.content}>
+
+            {view === "library" && (
+              <div>
+                <input style={s.searchInput} placeholder="Search recipes..." value={search} onChange={e => setSearch(e.target.value)} />
+                <div style={s.catRow}>
+                  {["All",...CATEGORIES].map(c => (
+                    <button key={c} style={{ ...s.catBtn, ...(filterCat===c?s.catBtnActive:{}) }} onClick={() => setFilterCat(c)}>{c}</button>
+                  ))}
+                </div>
+                {filteredRecipes.length===0 && <div style={s.empty}>No recipes yet. Add one!</div>}
+                <div style={s.recipeGrid}>
+                  {filteredRecipes.map(r => (
+                    <div key={r.id} style={s.recipeCard} onClick={() => { setSelectedRecipe(r); setView("detail"); }}>
+                      {r.photo_url ? <img src={r.photo_url} alt="" style={s.recipeThumb} /> : <div style={s.recipePlaceholder}>🍴</div>}
+                      <div style={s.recipeCardBody}>
+                        <div style={s.recipeCardCat}>{r.category}</div>
+                        <div style={s.recipeCardTitle}>{r.title}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {view === "add" && (
+              <div style={s.formWrap}>
+                <h2 style={s.formHeading}>Add Recipe</h2>
+                <div style={s.uploadBox}>
+                  <div style={s.uploadLabel}>📎 Upload from Claude JSON</div>
+                  <label style={s.uploadBtn}>Choose file<input type="file" accept=".json" style={{ display:"none" }} onChange={handleJsonUpload} /></label>
+                  {uploadError && <div style={{ color:"#e07b4a", fontSize:13, marginTop:6 }}>{uploadError}</div>}
+                </div>
+                <div style={s.divider}>— or fill in manually —</div>
+                <label style={s.label}>Title *</label>
+                <input style={s.input} value={form.title} onChange={e => setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Pasta Carbonara" />
+                <label style={s.label}>Category</label>
+                <select style={s.input} value={form.category} onChange={e => setForm(f=>({...f,category:e.target.value}))}>
+                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+                <label style={s.label}>Source URL (optional)</label>
+                <input style={s.input} value={form.source_url} onChange={e => setForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
+                <label style={s.label}>Photo URL (optional)</label>
+                <input style={s.input} value={form.photo_url} onChange={e => setForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
+                <label style={s.label}>Ingredients (one per line)</label>
+                <textarea style={s.textarea} value={form.ingredients} onChange={e => setForm(f=>({...f,ingredients:e.target.value}))} placeholder={"200g pasta\n2 eggs\n100g pancetta"} rows={5} />
+                <label style={s.label}>Steps (one per line)</label>
+                <textarea style={s.textarea} value={form.steps} onChange={e => setForm(f=>({...f,steps:e.target.value}))} placeholder={"Boil pasta\nFry pancetta\nMix eggs and cheese"} rows={5} />
+                {formError && <div style={{ color:"#e07b4a", marginBottom:8 }}>{formError}</div>}
+                <button style={s.submitBtn} onClick={handleFormSubmit} disabled={loading}>{loading?"Saving...":"Save Recipe"}</button>
+              </div>
+            )}
+
+            {view === "planner" && (
+              <div>
+                <h2 style={s.formHeading}>This Week's Dinners</h2>
+                {DAYS.map(day => {
+                  const row = weekPlan[day]; const recipe = row?.recipes;
+                  return (
+                    <div key={day} style={s.plannerRow}>
+                      <div style={s.plannerDay}>{day}</div>
+                      {recipe
+                        ? <div style={s.plannerRecipe}>
+                            {recipe.photo_url
+                              ? <img src={recipe.photo_url} style={{ width:44, height:44, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
+                              : <div style={{ width:44, height:44, borderRadius:8, background:"#222", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🍴</div>}
+                            <span style={s.plannerRecipeName} onClick={() => { setSelectedRecipe(recipe); setView("detail"); }}>{recipe.title}</span>
+                            <button style={s.plannerRemove} onClick={() => unassignDay(day)}>✕</button>
+                          </div>
+                        : <div style={{ flex:1 }}>
+                            <div style={{ color:"#555", fontSize:13, marginBottom:8 }}>Pick a recipe:</div>
+                            <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
+                              {recipes.map(r => (
+                                <div key={r.id} onClick={() => assignDay(day, r.id)}
+                                  style={{ flexShrink:0, width:64, cursor:"pointer", textAlign:"center" }}>
+                                  {r.photo_url
+                                    ? <img src={r.photo_url} style={{ width:64, height:64, borderRadius:10, objectFit:"cover", border:"2px solid #333" }} />
+                                    : <div style={{ width:64, height:64, borderRadius:10, background:"#222", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, border:"2px solid #333" }}>🍴</div>}
+                                  <div style={{ fontSize:10, color:"#aaa", marginTop:4, lineHeight:1.2, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{r.title}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {view === "shopping" && (
+              <div>
+                <h2 style={s.formHeading}>Shopping List</h2>
+                {Object.keys(weekPlan).length===0
+                  ? <div style={s.empty}>Plan your week first!</div>
+                  : (() => {
+                      const seen = {};
+                      DAYS.forEach(day => {
+                        const row = weekPlan[day]; if (!row?.recipes) return;
+                        (row.recipes.ingredients || []).forEach(ing => {
+                          const key = ing.trim().toLowerCase();
+                          if (!seen[key]) seen[key] = ing.trim();
+                        });
+                      });
+                      const allIngs = Object.values(seen);
+                      if (allIngs.length === 0) return <div style={s.empty}>No ingredients found.</div>;
+                      return <>
+                        <div style={{ color:"#888", fontSize:13, marginBottom:12 }}>Tick what you already have</div>
+                        {allIngs.map((ing, i) => (
+                          <div key={i} style={s.shopItem} onClick={() => setShoppingChecked(c=>({...c,[i]:!c[i]}))}>
+                            <div style={{ ...s.shopCheck, ...(shoppingChecked[i]?s.shopCheckDone:{}) }}>{shoppingChecked[i]?"✓":""}</div>
+                            <span style={{ textDecoration:shoppingChecked[i]?"line-through":"none", color:shoppingChecked[i]?"#555":"#eee" }}>{ing}</span>
+                          </div>
+                        ))}
+                      </>;
+                    })()
+                }
+              </div>
+            )}
+          </div>
+
+          <div style={s.nav}>
+            {[{id:"library",icon:"📚",label:"Recipes"},{id:"add",icon:"➕",label:"Add"},{id:"planner",icon:"📅",label:"Planner"},{id:"shopping",icon:"🛒",label:"Shopping"}].map(tab => (
+              <button key={tab.id} style={{ ...s.navBtn, ...(view===tab.id?s.navBtnActive:{}) }} onClick={() => setView(tab.id)}>
+                <span style={s.navIcon}>{tab.icon}</span>
+                <span style={s.navLabel}>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
