@@ -157,6 +157,7 @@
       const [formError, setFormError] = useState("");
       const [uploadError, setUploadError] = useState("");
       const [toast, setToast] = useState("");
+      const [editForm, setEditForm] = useState(null);
 
       useEffect(() => { if (authed) { fetchRecipes(); fetchWeekPlan(); } }, [authed]);
 
@@ -202,6 +203,17 @@
       async function unassignDay(day) {
         const existing = weekPlan[day];
         if (existing) { await sbDelete("week_plan", `id=eq.${existing.id}`); fetchWeekPlan(); }
+      }
+
+      async function updateRecipe(id, updates) {
+        setLoading(true);
+        await fetch(`${SB_URL}/rest/v1/recipes?id=eq.${id}`, { method: "PATCH", headers: H, body: JSON.stringify(updates) });
+        setLoading(false);
+        showToast("Recipe updated!");
+        await fetchRecipes();
+        const updated = { ...selectedRecipe, ...updates };
+        setSelectedRecipe(updated);
+        setEditForm(null);
       }
 
       function handlePinSubmit() {
@@ -289,27 +301,67 @@
       if (view === "detail" && selectedRecipe) return (
         <div style={s.screen}>
           <div style={s.detailHeader}>
-            <button style={s.backBtn} onClick={() => setView("library")}>← Back</button>
-            <button style={{ ...s.backBtn, color:"#e07b4a" }} onClick={() => deleteRecipe(selectedRecipe.id)}>Delete</button>
-          </div>
-          {selectedRecipe.photo_url && <img src={selectedRecipe.photo_url} alt="" style={s.detailPhoto} />}
-          <div style={s.detailBody}>
-            <div style={s.detailCat}>{selectedRecipe.category}</div>
-            <h2 style={s.detailTitle}>{selectedRecipe.title}</h2>
-            {selectedRecipe.source_url && <a href={selectedRecipe.source_url} target="_blank" style={s.detailLink}>View original source ↗</a>}
-            <div style={s.sectionLabel}>Ingredients</div>
-            {(selectedRecipe.ingredients||[]).map((ing,i) => <div key={i} style={s.listItem}>• {ing}</div>)}
-            <div style={s.sectionLabel}>Steps</div>
-            {(selectedRecipe.steps||[]).map((step,i) => <div key={i} style={s.listItem}><span style={s.stepNum}>{i+1}</span> {step}</div>)}
-            <div style={s.sectionLabel}>Add to week plan</div>
-            <div style={s.dayGrid}>
-              {DAYS.map(day => (
-                <button key={day} style={{ ...s.dayBtn, ...(weekPlan[day]?.recipe_id===selectedRecipe.id?s.dayBtnActive:{}) }}
-                  onClick={() => assignDay(day, selectedRecipe.id)}>{day.slice(0,3)}</button>
-              ))}
+            <button style={s.backBtn} onClick={() => { setView("library"); setEditForm(null); }}>← Back</button>
+            <div style={{ display:"flex", gap:12 }}>
+              <button style={{ ...s.backBtn, color:"#aaa" }} onClick={() => setEditForm(editForm ? null : {
+                title: selectedRecipe.title,
+                category: selectedRecipe.category || "Dinner",
+                source_url: selectedRecipe.source_url || "",
+                photo_url: selectedRecipe.photo_url || "",
+                ingredients: (selectedRecipe.ingredients||[]).join("\n"),
+                steps: (selectedRecipe.steps||[]).join("\n"),
+              })}>{editForm ? "Cancel" : "✏️ Edit"}</button>
+              <button style={{ ...s.backBtn, color:"#e07b4a" }} onClick={() => deleteRecipe(selectedRecipe.id)}>Delete</button>
             </div>
-            <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
           </div>
+          {editForm ? (
+            <div style={{ padding:"0 16px 40px" }}>
+              <h2 style={{ ...s.formHeading, marginTop:8 }}>Edit Recipe</h2>
+              <label style={s.label}>Title</label>
+              <input style={s.input} value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
+              <label style={s.label}>Category</label>
+              <select style={s.input} value={editForm.category} onChange={e => setEditForm(f=>({...f,category:e.target.value}))}>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <label style={s.label}>Photo URL</label>
+              <input style={s.input} value={editForm.photo_url} onChange={e => setEditForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
+              <label style={s.label}>Source URL</label>
+              <input style={s.input} value={editForm.source_url} onChange={e => setEditForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
+              <label style={s.label}>Ingredients (one per line)</label>
+              <textarea style={s.textarea} rows={6} value={editForm.ingredients} onChange={e => setEditForm(f=>({...f,ingredients:e.target.value}))} />
+              <label style={s.label}>Steps (one per line)</label>
+              <textarea style={s.textarea} rows={6} value={editForm.steps} onChange={e => setEditForm(f=>({...f,steps:e.target.value}))} />
+              <button style={s.submitBtn} disabled={loading} onClick={() => updateRecipe(selectedRecipe.id, {
+                title: editForm.title.trim(),
+                category: editForm.category,
+                source_url: editForm.source_url.trim() || null,
+                photo_url: editForm.photo_url.trim() || null,
+                ingredients: editForm.ingredients.split("\n").filter(l => l.trim()),
+                steps: editForm.steps.split("\n").filter(l => l.trim()),
+              })}>{loading ? "Saving..." : "Save Changes"}</button>
+            </div>
+          ) : (
+            <>
+              {selectedRecipe.photo_url && <img src={selectedRecipe.photo_url} alt="" style={s.detailPhoto} />}
+              <div style={s.detailBody}>
+                <div style={s.detailCat}>{selectedRecipe.category}</div>
+                <h2 style={s.detailTitle}>{selectedRecipe.title}</h2>
+                {selectedRecipe.source_url && <a href={selectedRecipe.source_url} target="_blank" style={s.detailLink}>View original source ↗</a>}
+                <div style={s.sectionLabel}>Ingredients</div>
+                {(selectedRecipe.ingredients||[]).map((ing,i) => <div key={i} style={s.listItem}>• {ing}</div>)}
+                <div style={s.sectionLabel}>Steps</div>
+                {(selectedRecipe.steps||[]).map((step,i) => <div key={i} style={s.listItem}><span style={s.stepNum}>{i+1}</span> {step}</div>)}
+                <div style={s.sectionLabel}>Add to week plan</div>
+                <div style={s.dayGrid}>
+                  {DAYS.map(day => (
+                    <button key={day} style={{ ...s.dayBtn, ...(weekPlan[day]?.recipe_id===selectedRecipe.id?s.dayBtnActive:{}) }}
+                      onClick={() => assignDay(day, selectedRecipe.id)}>{day.slice(0,3)}</button>
+                  ))}
+                </div>
+                <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
+              </div>
+            </>
+          )}
         </div>
       );
 
