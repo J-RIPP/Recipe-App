@@ -23,7 +23,7 @@
 
     const SB_URL = "https://tkpwseiasagnzerodiwl.supabase.co";
     const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ";
-    const CORRECT_PIN_HASH = "d83036ffb5b49a153bc391fd12b4a10df06bbb200f39fed97c331b03b6833ce7";
+    const _p = atob("MDQxMg==");
     const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     const CATEGORIES = ["Breakfast","Lunch","Dinner","Snack","Dessert","Other"];
 
@@ -205,13 +205,8 @@
       }
 
       function handlePinSubmit() {
-        async function checkPin() {
-          const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pin));
-          const hash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
-          if (hash === CORRECT_PIN_HASH) { setAuthed(true); }
-          else { setPinError(true); setTimeout(() => setPinError(false), 800); }
-        }
-        checkPin();
+        if (pin === _p) { setAuthed(true); }
+        else { setPinError(true); setTimeout(() => setPinError(false), 800); }
       }
 
       function handleFormSubmit() {
@@ -313,4 +308,17 @@
                   onClick={() => assignDay(day, selectedRecipe.id)}>{day.slice(0,3)}</button>
               ))}
             </div>
-            <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start 
+            <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
+          </div>
+        </div>
+      );
+
+      return (
+        <div style={s.app}>
+          {toast && <div style={s.toast}>{toast}</div>}
+          <div style={s.header}><span style={s.headerTitle}>🍽️ Our Recipes</span></div>
+          <div style={s.content}>
+
+            {view === "library" && (
+              <div>
+        
