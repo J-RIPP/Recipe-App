@@ -23,7 +23,7 @@
 
     const SB_URL = "https://tkpwseiasagnzerodiwl.supabase.co";
     const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ";
-    const CORRECT_PIN = "0412";
+    const CORRECT_PIN_HASH = "d83036ffb5b49a153bc391fd12b4a10df06bbb200f39fed97c331b03b6833ce7";
     const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     const CATEGORIES = ["Breakfast","Lunch","Dinner","Snack","Dessert","Other"];
 
@@ -205,8 +205,13 @@
       }
 
       function handlePinSubmit() {
-        if (pin === CORRECT_PIN) { setAuthed(true); }
-        else { setPinError(true); setTimeout(() => setPinError(false), 800); }
+        async function checkPin() {
+          const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pin));
+          const hash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+          if (hash === CORRECT_PIN_HASH) { setAuthed(true); }
+          else { setPinError(true); setTimeout(() => setPinError(false), 800); }
+        }
+        checkPin();
       }
 
       function handleFormSubmit() {
@@ -308,136 +313,4 @@
                   onClick={() => assignDay(day, selectedRecipe.id)}>{day.slice(0,3)}</button>
               ))}
             </div>
-            <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
-          </div>
-        </div>
-      );
-
-      return (
-        <div style={s.app}>
-          {toast && <div style={s.toast}>{toast}</div>}
-          <div style={s.header}><span style={s.headerTitle}>🍽️ Our Recipes</span></div>
-          <div style={s.content}>
-
-            {view === "library" && (
-              <div>
-                <input style={s.searchInput} placeholder="Search recipes..." value={search} onChange={e => setSearch(e.target.value)} />
-                <div style={s.catRow}>
-                  {["All",...CATEGORIES].map(c => (
-                    <button key={c} style={{ ...s.catBtn, ...(filterCat===c?s.catBtnActive:{}) }} onClick={() => setFilterCat(c)}>{c}</button>
-                  ))}
-                </div>
-                {filteredRecipes.length===0 && <div style={s.empty}>No recipes yet. Add one!</div>}
-                <div style={s.recipeGrid}>
-                  {filteredRecipes.map(r => (
-                    <div key={r.id} style={s.recipeCard} onClick={() => { setSelectedRecipe(r); setView("detail"); }}>
-                      {r.photo_url ? <img src={r.photo_url} alt="" style={s.recipeThumb} /> : <div style={s.recipePlaceholder}>🍴</div>}
-                      <div style={s.recipeCardBody}>
-                        <div style={s.recipeCardCat}>{r.category}</div>
-                        <div style={s.recipeCardTitle}>{r.title}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {view === "add" && (
-              <div style={s.formWrap}>
-                <h2 style={s.formHeading}>Add Recipe</h2>
-                <div style={s.uploadBox}>
-                  <div style={s.uploadLabel}>📎 Upload from Claude JSON</div>
-                  <label style={s.uploadBtn}>Choose file<input type="file" accept=".json" style={{ display:"none" }} onChange={handleJsonUpload} /></label>
-                  {uploadError && <div style={{ color:"#e07b4a", fontSize:13, marginTop:6 }}>{uploadError}</div>}
-                </div>
-                <div style={s.divider}>— or fill in manually —</div>
-                <label style={s.label}>Title *</label>
-                <input style={s.input} value={form.title} onChange={e => setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Pasta Carbonara" />
-                <label style={s.label}>Category</label>
-                <select style={s.input} value={form.category} onChange={e => setForm(f=>({...f,category:e.target.value}))}>
-                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
-                <label style={s.label}>Source URL (optional)</label>
-                <input style={s.input} value={form.source_url} onChange={e => setForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
-                <label style={s.label}>Photo URL (optional)</label>
-                <input style={s.input} value={form.photo_url} onChange={e => setForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
-                <label style={s.label}>Ingredients (one per line)</label>
-                <textarea style={s.textarea} value={form.ingredients} onChange={e => setForm(f=>({...f,ingredients:e.target.value}))} placeholder={"200g pasta\n2 eggs\n100g pancetta"} rows={5} />
-                <label style={s.label}>Steps (one per line)</label>
-                <textarea style={s.textarea} value={form.steps} onChange={e => setForm(f=>({...f,steps:e.target.value}))} placeholder={"Boil pasta\nFry pancetta\nMix eggs and cheese"} rows={5} />
-                {formError && <div style={{ color:"#e07b4a", marginBottom:8 }}>{formError}</div>}
-                <button style={s.submitBtn} onClick={handleFormSubmit} disabled={loading}>{loading?"Saving...":"Save Recipe"}</button>
-              </div>
-            )}
-
-            {view === "planner" && (
-              <div>
-                <h2 style={s.formHeading}>This Week's Dinners</h2>
-                {DAYS.map(day => {
-                  const row = weekPlan[day]; const recipe = row?.recipes;
-                  return (
-                    <div key={day} style={s.plannerRow}>
-                      <div style={s.plannerDay}>{day}</div>
-                      {recipe
-                        ? <div style={s.plannerRecipe}>
-                            <span style={s.plannerRecipeName} onClick={() => { setSelectedRecipe(recipe); setView("detail"); }}>{recipe.title}</span>
-                            <button style={s.plannerRemove} onClick={() => unassignDay(day)}>✕</button>
-                          </div>
-                        : <div style={s.plannerEmpty}>
-                            <select style={s.plannerSelect} value="" onChange={e => { if(e.target.value) assignDay(day, e.target.value); }}>
-                              <option value="" disabled>Pick a recipe...</option>
-                              {recipes.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
-                            </select>
-                          </div>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {view === "shopping" && (
-              <div>
-                <h2 style={s.formHeading}>Shopping List</h2>
-                {Object.keys(weekPlan).length===0
-                  ? <div style={s.empty}>Plan your week first!</div>
-                  : <>
-                      <div style={{ color:"#888", fontSize:13, marginBottom:12 }}>Tick what you already have</div>
-                      {DAYS.map(day => {
-                        const row = weekPlan[day]; if (!row?.recipes) return null;
-                        const ings = row.recipes.ingredients || []; if (ings.length===0) return null;
-                        return (
-                          <div key={day} style={{ marginBottom:18 }}>
-                            <div style={s.shopDayLabel}>{day} — {row.recipes.title}</div>
-                            {ings.map((ing,i) => {
-                              const key = `${day}-${i}`;
-                              return (
-                                <div key={key} style={s.shopItem} onClick={() => setShoppingChecked(c=>({...c,[key]:!c[key]}))}>
-                                  <div style={{ ...s.shopCheck, ...(shoppingChecked[key]?s.shopCheckDone:{}) }}>{shoppingChecked[key]?"✓":""}</div>
-                                  <span style={{ textDecoration:shoppingChecked[key]?"line-through":"none", color:shoppingChecked[key]?"#555":"#eee" }}>{ing}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                    </>}
-              </div>
-            )}
-          </div>
-
-          <div style={s.nav}>
-            {[{id:"library",icon:"📚",label:"Recipes"},{id:"add",icon:"➕",label:"Add"},{id:"planner",icon:"📅",label:"Planner"},{id:"shopping",icon:"🛒",label:"Shopping"}].map(tab => (
-              <button key={tab.id} style={{ ...s.navBtn, ...(view===tab.id?s.navBtnActive:{}) }} onClick={() => setView(tab.id)}>
-                <span style={s.navIcon}>{tab.icon}</span>
-                <span style={s.navLabel}>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
-</body>
-</html>
+            <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start 
