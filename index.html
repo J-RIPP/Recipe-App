@@ -19,13 +19,54 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const SB_URL = "https://tkpwseiasagnzerodiwl.supabase.co";
     const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ";
     const CORRECT_PIN = "0412";
-    const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     const CATEGORIES = ["Breakfast","Lunch","Dinner","Snack","Dessert","Other"];
+    const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    const SHOP_GROUPS = {
+      "Produce": ["onion","garlic","tomato","pepper","carrot","potato","lettuce","spinach","rocket","avocado","lemon","lime","cucumber","mushroom","courgette","broccoli","coriander","parsley","basil","herb","vegetable","veg","salad","spring onion","celery","leek","ginger","chilli","aubergine","corn","pea","edamame","sweetcorn","kale","cabbage","asparagus","fennel","artichoke","radish","beetroot","squash","pumpkin"],
+      "Meat & Fish": ["chicken","beef","lamb","pork","salmon","tuna","fish","mince","steak","bacon","sausage","tofu","prawns","shrimp","turkey","duck","halloumi","tofu"],
+      "Dairy & Eggs": ["egg","milk","cream","butter","cheese","parmesan","feta","mozzarella","yogurt","yoghurt","brie","ricotta","cheddar","goat cheese","creme fraiche","mascarpone"],
+      "Frozen": ["frozen","ice"],
+      "Pasta & Grains": ["pasta","rice","noodle","orzo","gnocchi","quinoa","couscous","bread","flour","oat","muffin","tortilla","wrap","pitta","bagel","crouton"],
+      "Tins & Jars": ["tin","can","canned","chopped tomato","stock","sauce","mayo","ketchup","mustard","vinegar","jam","honey","syrup","soy","peri peri","harissa","miso","tahini","pesto","sriracha","chilli jam","kimchi","pickle","olive","anchovy","coconut milk"],
+      "Pantry": ["oil","salt","pepper","spice","paprika","cumin","turmeric","cinnamon","sugar","cornflour","baking","seasoning","chili flakes","chilli flakes","garlic granules","smoked paprika","dried","curry","garam","cajun","za'atar","ras el hanout","stock cube"],
+    };
+
+    function getGroup(ing) {
+      const lower = ing.toLowerCase();
+      for (const [group, keywords] of Object.entries(SHOP_GROUPS)) {
+        if (keywords.some(k => lower.includes(k))) return group;
+      }
+      return "Other";
+    }
+
+    // Returns array of date objects: 7 days back, today, 7 days forward
+    function getRollingDays() {
+      const days = [];
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      for (let i = -7; i <= 7; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        days.push(d);
+      }
+      return days;
+    }
+
+    function dateToKey(d) {
+      return d.toISOString().split("T")[0];
+    }
+
+    function formatDayLabel(d) {
+      const name = DAY_NAMES[d.getDay()];
+      return `${name.slice(0,3)} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
+    }
 
     function getMonday(d = new Date()) {
       const copy = new Date(d);
@@ -33,6 +74,12 @@
       const diff = copy.getDate() - day + (day === 0 ? -6 : 1);
       copy.setDate(diff);
       return copy.toISOString().split("T")[0];
+    }
+
+    function getTodayKey() {
+      const d = new Date();
+      d.setHours(0,0,0,0);
+      return dateToKey(d);
     }
 
     const H = {
@@ -43,19 +90,38 @@
     };
 
     async function sbGet(table, query = "") {
-      const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { headers: H });
-      return res.json();
+      try {
+        const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { headers: H });
+        if (!res.ok) throw new Error(res.status);
+        return res.json();
+      } catch(e) { console.error("sbGet error", e); return []; }
     }
     async function sbPost(table, body) {
-      const res = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: H, body: JSON.stringify(body) });
-      return res.json();
+      try {
+        const res = await fetch(`${SB_URL}/rest/v1/${table}`, { method:"POST", headers:H, body:JSON.stringify(body) });
+        if (!res.ok) throw new Error(res.status);
+        return res.json();
+      } catch(e) { console.error("sbPost error", e); return null; }
     }
     async function sbPatch(table, query, body) {
-      const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { method: "PATCH", headers: H, body: JSON.stringify(body) });
-      return res.json();
+      try {
+        const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { method:"PATCH", headers:H, body:JSON.stringify(body) });
+        if (!res.ok) throw new Error(res.status);
+        return res.json();
+      } catch(e) { console.error("sbPatch error", e); return null; }
     }
     async function sbDelete(table, query) {
-      await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { method: "DELETE", headers: H });
+      try {
+        const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, { method:"DELETE", headers:H });
+        if (!res.ok) throw new Error(res.status);
+      } catch(e) { console.error("sbDelete error", e); }
+    }
+    async function sbUpsert(table, body, onConflict) {
+      try {
+        const res = await fetch(`${SB_URL}/rest/v1/${table}?on_conflict=${onConflict}`, { method:"POST", headers:{ ...H, "Prefer":"resolution=merge-duplicates,return=representation" }, body:JSON.stringify(body) });
+        if (!res.ok) throw new Error(res.status);
+        return res.json();
+      } catch(e) { console.error("sbUpsert error", e); return null; }
     }
 
     const s = {
@@ -67,26 +133,25 @@
       pinDot: { width:14, height:14, borderRadius:"50%", transition:"background 0.2s" },
       pinGrid: { display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, margin:"0 auto 16px", maxWidth:220 },
       pinBtn: { background:"#2a2a2a", border:"none", borderRadius:12, color:"#fff", fontSize:20, padding:"14px 0", cursor:"pointer" },
-      pinEnter: { background:"#e07b4a", border:"none", borderRadius:12, color:"#fff", fontSize:16, fontWeight:700, padding:"12px 40px", cursor:"pointer", width:"100%" },
       app: { minHeight:"100vh", background:"#111", color:"#eee", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto", position:"relative" },
       header: { background:"#1a1a1a", padding:"16px 20px", borderBottom:"1px solid #2a2a2a", position:"sticky", top:0, zIndex:10 },
       headerTitle: { fontSize:20, fontWeight:700, color:"#fff" },
       content: { flex:1, padding:"16px 16px 90px", overflowY:"auto" },
-      toast: { position:"fixed", top:20, left:"50%", transform:"translateX(-50%)", background:"#e07b4a", color:"#fff", padding:"10px 24px", borderRadius:20, fontSize:14, zIndex:100 },
+      toast: { position:"fixed", top:20, left:"50%", transform:"translateX(-50%)", background:"#e07b4a", color:"#fff", padding:"10px 24px", borderRadius:20, fontSize:14, zIndex:100, whiteSpace:"nowrap" },
       searchInput: { width:"100%", background:"#1e1e1e", border:"1px solid #333", borderRadius:10, color:"#eee", padding:"10px 14px", fontSize:15, marginBottom:10 },
       catRow: { display:"flex", gap:8, overflowX:"auto", paddingBottom:8, marginBottom:12 },
-      catBtn: { background:"#1e1e1e", border:"1px solid #333", borderRadius:20, color:"#aaa", padding:"6px 14px", fontSize:13, whiteSpace:"nowrap", cursor:"pointer" },
+      catBtn: { background:"#1e1e1e", border:"1px solid #333", borderRadius:20, color:"#aaa", padding:"6px 14px", fontSize:13, whiteSpace:"nowrap", cursor:"pointer", flexShrink:0 },
       catBtnActive: { background:"#e07b4a", border:"1px solid #e07b4a", color:"#fff" },
       empty: { color:"#666", textAlign:"center", marginTop:60, fontSize:15 },
       recipeGrid: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 },
-      recipeCard: { background:"#1a1a1a", borderRadius:14, overflow:"hidden", cursor:"pointer", border:"1px solid #2a2a2a" },
+      recipeCard: { background:"#1a1a1a", borderRadius:14, overflow:"hidden", cursor:"pointer", border:"1px solid #2a2a2a", position:"relative" },
       recipeThumb: { width:"100%", height:110, objectFit:"cover" },
       recipePlaceholder: { width:"100%", height:110, background:"#222", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 },
       recipeCardBody: { padding:"10px 12px 12px" },
       recipeCardCat: { fontSize:11, color:"#e07b4a", textTransform:"uppercase", letterSpacing:1, marginBottom:3 },
       recipeCardTitle: { fontSize:14, color:"#fff", fontWeight:600, lineHeight:1.3 },
       screen: { minHeight:"100vh", background:"#111", color:"#eee", maxWidth:480, margin:"0 auto", paddingBottom:40 },
-      detailHeader: { display:"flex", justifyContent:"space-between", padding:"14px 16px" },
+      detailHeader: { display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 16px" },
       backBtn: { background:"none", border:"none", color:"#aaa", fontSize:15, cursor:"pointer", padding:0 },
       detailPhoto: { width:"100%", height:220, objectFit:"cover" },
       detailBody: { padding:"16px 16px 40px" },
@@ -122,13 +187,11 @@
       textarea: { width:"100%", background:"#1e1e1e", border:"1px solid #333", borderRadius:10, color:"#eee", padding:"10px 14px", fontSize:15, resize:"vertical" },
       submitBtn: { background:"#e07b4a", border:"none", borderRadius:12, color:"#fff", fontSize:16, fontWeight:700, padding:"14px 0", width:"100%", cursor:"pointer", marginTop:20 },
       plannerRow: { background:"#1a1a1a", borderRadius:12, padding:"12px 14px", marginBottom:10, display:"flex", alignItems:"center", gap:12 },
-      plannerDay: { color:"#e07b4a", fontSize:13, fontWeight:700, width:80, flexShrink:0 },
-      plannerRecipe: { flex:1, display:"flex", alignItems:"center", justifyContent:"space-between" },
-      plannerRecipeName: { color:"#fff", fontSize:14, cursor:"pointer", textDecoration:"underline" },
-      plannerRemove: { background:"none", border:"none", color:"#666", fontSize:16, cursor:"pointer" },
-      plannerEmpty: { flex:1 },
-      plannerSelect: { background:"#2a2a2a", border:"1px solid #444", borderRadius:8, color:"#aaa", padding:"6px 10px", fontSize:13, width:"100%" },
-      shopDayLabel: { fontSize:13, color:"#e07b4a", fontWeight:700, marginBottom:8, textTransform:"uppercase", letterSpacing:1 },
+      plannerRecipe: { flex:1, display:"flex", alignItems:"center", gap:10 },
+      plannerRecipeName: { color:"#fff", fontSize:13, cursor:"pointer", textDecoration:"underline", flex:1 },
+      plannerRemove: { background:"none", border:"none", color:"#555", fontSize:16, cursor:"pointer", flexShrink:0, padding:"4px 8px" },
+      shopGroup: { marginBottom:20 },
+      shopGroupLabel: { fontSize:11, color:"#e07b4a", textTransform:"uppercase", letterSpacing:2, marginBottom:8, fontWeight:700 },
       shopItem: { display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #1e1e1e", cursor:"pointer" },
       shopCheck: { width:22, height:22, borderRadius:6, border:"2px solid #444", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:"#fff" },
       shopCheckDone: { background:"#4caf50", border:"2px solid #4caf50" },
@@ -137,99 +200,163 @@
       navBtnActive: { color:"#e07b4a" },
       navIcon: { fontSize:20 },
       navLabel: { fontSize:10, textTransform:"uppercase", letterSpacing:0.5 },
+      confirmOverlay: { position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.75)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" },
+      confirmBox: { background:"#1a1a1a", borderRadius:"20px 20px 0 0", padding:"24px 20px 40px", width:"100%", maxWidth:480 },
+      loadingScreen: { minHeight:"100vh", background:"#111", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 },
+      overlay: { position:"fixed", top:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, bottom:0, background:"#111", zIndex:50, display:"flex", flexDirection:"column" },
     };
 
     function App() {
       const [pin, setPin] = useState("");
       const [authed, setAuthed] = useState(false);
       const [pinError, setPinError] = useState(false);
+      const [appLoading, setAppLoading] = useState(false);
       const [view, setView] = useState("library");
+      const [prevView, setPrevView] = useState("library");
       const [recipes, setRecipes] = useState([]);
-      const [weekPlan, setWeekPlan] = useState({});
+      const [plannerData, setPlannerData] = useState({}); // key: dateKey, val: {id, recipe_id, recipes}
       const [selectedRecipe, setSelectedRecipe] = useState(null);
       const [cookStep, setCookStep] = useState(0);
       const [loading, setLoading] = useState(false);
-      const [shoppingChecked, setShoppingChecked] = useState({});
+      const [shopTicks, setShopTicks] = useState({});
       const [weekStart] = useState(getMonday());
       const [search, setSearch] = useState("");
+      const [pickerSearch, setPickerSearch] = useState("");
       const [filterCat, setFilterCat] = useState("All");
-      const [form, setForm] = useState({ title:"", category:"Dinner", source_url:"", ingredients:"", steps:"", photo_url:"" });
+      const [filterFav, setFilterFav] = useState(false);
+      const [sortBy, setSortBy] = useState("newest");
+      const [form, setForm] = useState({ title:"", category:"Dinner", source_url:"", ingredients:"", steps:"", photo_url:"", servings:2, prep_time:"", cook_time:"" });
       const [formError, setFormError] = useState("");
       const [uploadError, setUploadError] = useState("");
       const [toast, setToast] = useState("");
       const [editForm, setEditForm] = useState(null);
+      const [pickerDay, setPickerDay] = useState(null);
+      const [confirmDelete, setConfirmDelete] = useState(false);
+      const [servingsScale, setServingsScale] = useState(1);
+      const fileInputRef = useRef(null);
+      const todayKey = getTodayKey();
+      const rollingDays = getRollingDays();
 
-      useEffect(() => { if (authed) { fetchRecipes(); fetchWeekPlan(); } }, [authed]);
+      useEffect(() => {
+        if (authed) {
+          setAppLoading(true);
+          Promise.all([fetchRecipes(), fetchPlannerData(), fetchShopTicks()]).finally(() => setAppLoading(false));
+        }
+      }, [authed]);
+
+      // Auto-submit PIN on 4th digit
+      useEffect(() => {
+        if (pin.length === 4) {
+          if (pin === CORRECT_PIN) { setAuthed(true); }
+          else { setPinError(true); setTimeout(() => { setPinError(false); setPin(""); }, 800); }
+        }
+      }, [pin]);
 
       function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2500); }
+      function goTo(v) { setPrevView(view); setView(v); }
 
       async function fetchRecipes() {
         const data = await sbGet("recipes", "order=created_at.desc");
         setRecipes(Array.isArray(data) ? data : []);
       }
 
-      async function fetchWeekPlan() {
-        const data = await sbGet("week_plan", `week_start=eq.${weekStart}&select=*,recipes(*)`);
+      async function fetchPlannerData() {
+        // Fetch rolling window: 14 days around today
+        const start = rollingDays[0];
+        const end = rollingDays[rollingDays.length - 1];
+        const data = await sbGet("week_plan", `date=gte.${dateToKey(start)}&date=lte.${dateToKey(end)}&select=*,recipes(*)`);
         const plan = {};
-        (Array.isArray(data) ? data : []).forEach(row => { plan[row.day] = row; });
-        setWeekPlan(plan);
+        (Array.isArray(data) ? data : []).forEach(row => { plan[row.date] = row; });
+        setPlannerData(plan);
+      }
+
+      async function fetchShopTicks() {
+        const data = await sbGet("shopping_ticks", `week_start=eq.${weekStart}&ticked=eq.true`);
+        const ticks = {};
+        (Array.isArray(data) ? data : []).forEach(row => { ticks[row.ingredient] = true; });
+        setShopTicks(ticks);
+      }
+
+      async function toggleShopTick(ing) {
+        const newVal = !shopTicks[ing];
+        setShopTicks(t => ({ ...t, [ing]: newVal }));
+        if (newVal) {
+          await sbUpsert("shopping_ticks", { week_start: weekStart, ingredient: ing, ticked: true }, "week_start,ingredient");
+        } else {
+          // Use filter string safely
+          await sbDelete("shopping_ticks", `week_start=eq.${weekStart}&ingredient=eq.${ing.replace(/&/g,'%26').replace(/=/g,'%3D')}`);
+        }
       }
 
       async function saveRecipe(recipe) {
         setLoading(true);
-        await sbPost("recipes", recipe);
+        const result = await sbPost("recipes", recipe);
         setLoading(false);
+        if (!result) { showToast("❌ Save failed — check connection"); return; }
         showToast("Recipe saved!");
         fetchRecipes();
         setView("library");
+        setForm({ title:"", category:"Dinner", source_url:"", ingredients:"", steps:"", photo_url:"", servings:2, prep_time:"", cook_time:"" });
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
 
       async function deleteRecipe(id) {
+        // Delete from all planner entries
         await sbDelete("week_plan", `recipe_id=eq.${id}`);
         await sbDelete("recipes", `id=eq.${id}`);
         showToast("Recipe deleted");
-        fetchRecipes(); fetchWeekPlan();
-        setSelectedRecipe(null); setView("library");
+        fetchRecipes(); fetchPlannerData();
+        setSelectedRecipe(null); setConfirmDelete(false);
+        setView("library");
       }
 
-      async function assignDay(day, recipeId) {
-        const existing = weekPlan[day];
-        if (existing) await sbPatch("week_plan", `id=eq.${existing.id}`, { recipe_id: recipeId });
-        else await sbPost("week_plan", { day, recipe_id: recipeId, week_start: weekStart });
-        fetchWeekPlan();
-        showToast(`Assigned to ${day}!`);
+      async function assignDay(dateKey, recipeId) {
+        const existing = plannerData[dateKey];
+        if (existing) {
+          await sbPatch("week_plan", `id=eq.${existing.id}`, { recipe_id: recipeId });
+        } else {
+          await sbPost("week_plan", { date: dateKey, recipe_id: recipeId, week_start: getMonday(new Date(dateKey)) });
+        }
+        fetchPlannerData();
+        showToast("Added to plan!");
       }
 
-      async function unassignDay(day) {
-        const existing = weekPlan[day];
-        if (existing) { await sbDelete("week_plan", `id=eq.${existing.id}`); fetchWeekPlan(); }
+      async function unassignDay(dateKey) {
+        const existing = plannerData[dateKey];
+        if (existing) { await sbDelete("week_plan", `id=eq.${existing.id}`); fetchPlannerData(); }
       }
 
       async function updateRecipe(id, updates) {
         setLoading(true);
-        await fetch(`${SB_URL}/rest/v1/recipes?id=eq.${id}`, { method: "PATCH", headers: H, body: JSON.stringify(updates) });
+        const result = await sbPatch("recipes", `id=eq.${id}`, updates);
         setLoading(false);
+        if (!result) { showToast("❌ Update failed — check connection"); return; }
         showToast("Recipe updated!");
         await fetchRecipes();
-        const updated = { ...selectedRecipe, ...updates };
-        setSelectedRecipe(updated);
+        setSelectedRecipe(prev => ({ ...prev, ...updates }));
         setEditForm(null);
       }
 
-      function handlePinSubmit() {
-        if (pin === CORRECT_PIN) { setAuthed(true); }
-        else { setPinError(true); setTimeout(() => setPinError(false), 800); }
+      async function toggleFavourite(recipe) {
+        const newVal = !recipe.is_favourite;
+        await sbPatch("recipes", `id=eq.${recipe.id}`, { is_favourite: newVal });
+        setSelectedRecipe(prev => ({ ...prev, is_favourite: newVal }));
+        setRecipes(rs => rs.map(r => r.id === recipe.id ? { ...r, is_favourite: newVal } : r));
+        showToast(newVal ? "Added to favourites ♥" : "Removed from favourites");
       }
 
       function handleFormSubmit() {
         if (!form.title.trim()) { setFormError("Title is required"); return; }
         saveRecipe({
           title: form.title.trim(), category: form.category,
-          source_url: form.source_url.trim() || null, photo_url: form.photo_url.trim() || null,
-          ingredients: form.ingredients.split("\n").filter(l => l.trim()),
-          steps: form.steps.split("\n").filter(l => l.trim()),
+          source_url: form.source_url.trim()||null, photo_url: form.photo_url.trim()||null,
+          ingredients: form.ingredients.split("\n").filter(l=>l.trim()),
+          steps: form.steps.split("\n").filter(l=>l.trim()),
+          servings: parseInt(form.servings)||2,
+          prep_time: form.prep_time.trim()||null,
+          cook_time: form.cook_time.trim()||null,
+          is_favourite: false, rating: 0, notes: null,
         });
-        setForm({ title:"", category:"Dinner", source_url:"", ingredients:"", steps:"", photo_url:"" });
         setFormError("");
       }
 
@@ -240,17 +367,80 @@
           try {
             const data = JSON.parse(ev.target.result);
             if (!data.title) { setUploadError("Invalid file — missing title."); return; }
-            saveRecipe({ title:data.title, category:data.category||"Dinner", source_url:data.source_url||null, photo_url:data.photo_url||null, ingredients:Array.isArray(data.ingredients)?data.ingredients:[], steps:Array.isArray(data.steps)?data.steps:[] });
+            saveRecipe({
+              title:data.title, category:data.category||"Dinner",
+              source_url:data.source_url||null, photo_url:data.photo_url||null,
+              ingredients:Array.isArray(data.ingredients)?data.ingredients:[],
+              steps:Array.isArray(data.steps)?data.steps:[],
+              servings:data.servings||2,
+              prep_time:data.prep_time||null, cook_time:data.cook_time||null,
+              is_favourite:false, rating:0, notes:null,
+            });
             setUploadError("");
           } catch { setUploadError("Could not parse file."); }
         };
         reader.readAsText(file);
+        // Reset input so same file can be re-uploaded
+        e.target.value = "";
       }
 
-      const filteredRecipes = recipes.filter(r =>
-        r.title.toLowerCase().includes(search.toLowerCase()) && (filterCat === "All" || r.category === filterCat)
-      );
+      function scaleIngredient(ing, scale) {
+        if (scale === 1) return ing;
+        return ing.replace(/(\d+\.?\d*)/g, (m) => {
+          const n = parseFloat(m) * scale;
+          return Number.isInteger(n) ? n : Math.round(n * 10) / 10;
+        });
+      }
 
+      function getSortedRecipes(list) {
+        const arr = [...list];
+        if (sortBy === "az") return arr.sort((a,b) => a.title.localeCompare(b.title));
+        if (sortBy === "rating") return arr.sort((a,b) => (b.rating||0) - (a.rating||0));
+        if (sortBy === "newest") return arr; // already sorted by created_at desc
+        return arr;
+      }
+
+      const filteredRecipes = getSortedRecipes(recipes.filter(r => {
+        const matchSearch = r.title.toLowerCase().includes(search.toLowerCase());
+        const matchCat = filterCat === "All" || r.category === filterCat;
+        const matchFav = !filterFav || r.is_favourite;
+        return matchSearch && matchCat && matchFav;
+      }));
+
+      // Tonight's dinner
+      const tonightEntry = plannerData[todayKey];
+      const tonightRecipe = tonightEntry?.recipes;
+
+      // Build grouped shopping list from current week plan
+      function buildShopGroups() {
+        const seen = {};
+        Object.values(plannerData).forEach(row => {
+          if (!row?.recipes) return;
+          // Only include current week
+          const rowWeekStart = getMonday(new Date(row.date));
+          if (rowWeekStart !== weekStart) return;
+          (row.recipes.ingredients || []).forEach(ing => {
+            const key = ing.trim().toLowerCase();
+            if (!seen[key]) seen[key] = ing.trim();
+          });
+        });
+        const groups = {};
+        Object.values(seen).forEach(ing => {
+          const g = getGroup(ing);
+          if (!groups[g]) groups[g] = [];
+          groups[g].push(ing);
+        });
+        return groups;
+      }
+
+      // Get planned date keys for a recipe
+      function getPlannedDates(recipeId) {
+        return Object.entries(plannerData)
+          .filter(([k, v]) => v?.recipe_id === recipeId)
+          .map(([k]) => k);
+      }
+
+      // ─── PIN SCREEN ───────────────────────────────────────────────────────
       if (!authed) return (
         <div style={s.pinScreen}>
           <div style={s.pinCard}>
@@ -266,18 +456,26 @@
                   onClick={() => { if(k==="⌫") setPin(p=>p.slice(0,-1)); else if(k!==""&&pin.length<4) setPin(p=>p+k); }}>{k}</button>
               ))}
             </div>
-            <button style={s.pinEnter} onClick={handlePinSubmit}>Enter</button>
             {pinError && <p style={{ color:"#e07b4a", textAlign:"center", marginTop:8 }}>Wrong PIN</p>}
           </div>
         </div>
       );
 
+      if (appLoading) return (
+        <div style={s.loadingScreen}>
+          <div style={{ fontSize:48 }}>🍽️</div>
+          <div style={{ color:"#888", fontSize:14 }}>Loading your recipes...</div>
+        </div>
+      );
+
+      // ─── COOK MODE ────────────────────────────────────────────────────────
       if (view === "cook" && selectedRecipe) {
         const steps = selectedRecipe.steps || [];
+        const isDone = cookStep >= steps.length - 1;
         return (
           <div style={s.cookScreen}>
             <div style={s.cookHeader}>
-              <button style={s.backBtn} onClick={() => { setView("library"); setCookStep(0); }}>← Back</button>
+              <button style={s.backBtn} onClick={() => { setView("detail"); setCookStep(0); }}>← Back</button>
               <span style={s.cookTitle}>{selectedRecipe.title}</span>
             </div>
             <div style={s.cookBody}>
@@ -285,9 +483,9 @@
               <div style={s.cookStepText}>{steps[cookStep]}</div>
               <div style={s.cookNav}>
                 <button style={{ ...s.cookNavBtn, opacity:cookStep===0?0.3:1 }} disabled={cookStep===0} onClick={() => setCookStep(c=>c-1)}>← Prev</button>
-                {cookStep < steps.length-1
+                {!isDone
                   ? <button style={s.cookNavBtn} onClick={() => setCookStep(c=>c+1)}>Next →</button>
-                  : <button style={{ ...s.cookNavBtn, background:"#4caf50" }} onClick={() => { setView("library"); setCookStep(0); }}>Done ✓</button>}
+                  : <button style={{ ...s.cookNavBtn, background:"#4caf50" }} onClick={() => { setView("detail"); setCookStep(0); }}>Done ✓</button>}
               </div>
               <div style={s.cookIngBox}>
                 <div style={s.cookIngTitle}>Ingredients</div>
@@ -298,108 +496,237 @@
         );
       }
 
-      if (view === "detail" && selectedRecipe) return (
-        <div style={s.screen}>
-          <div style={s.detailHeader}>
-            <button style={s.backBtn} onClick={() => { setView("library"); setEditForm(null); }}>← Back</button>
-            <div style={{ display:"flex", gap:12 }}>
-              <button style={{ ...s.backBtn, color:"#aaa" }} onClick={() => setEditForm(editForm ? null : {
-                title: selectedRecipe.title,
-                category: selectedRecipe.category || "Dinner",
-                source_url: selectedRecipe.source_url || "",
-                photo_url: selectedRecipe.photo_url || "",
-                ingredients: (selectedRecipe.ingredients||[]).join("\n"),
-                steps: (selectedRecipe.steps||[]).join("\n"),
-              })}>{editForm ? "Cancel" : "✏️ Edit"}</button>
-              <button style={{ ...s.backBtn, color:"#e07b4a" }} onClick={() => deleteRecipe(selectedRecipe.id)}>Delete</button>
+      // ─── RECIPE DETAIL ────────────────────────────────────────────────────
+      if (view === "detail" && selectedRecipe) {
+        const baseServings = selectedRecipe.servings || 2;
+        const scaledServings = Math.max(1, baseServings * servingsScale);
+        const plannedDates = getPlannedDates(selectedRecipe.id);
+        return (
+          <div style={s.screen}>
+            {confirmDelete && (
+              <div style={s.confirmOverlay}>
+                <div style={s.confirmBox}>
+                  <div style={{ color:"#fff", fontSize:17, fontWeight:700, marginBottom:8 }}>Delete "{selectedRecipe.title}"?</div>
+                  <div style={{ color:"#888", fontSize:14, marginBottom:20 }}>This cannot be undone and will remove it from your plan.</div>
+                  <button style={{ ...s.submitBtn, marginTop:0 }} onClick={() => deleteRecipe(selectedRecipe.id)}>Yes, delete</button>
+                  <button style={{ ...s.submitBtn, marginTop:10, background:"#2a2a2a" }} onClick={() => setConfirmDelete(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+            <div style={s.detailHeader}>
+              <button style={s.backBtn} onClick={() => { setView(prevView==="planner"?"planner":"library"); setEditForm(null); setServingsScale(1); }}>← Back</button>
+              <div style={{ display:"flex", gap:16, alignItems:"center" }}>
+                <button style={{ background:"none", border:"none", fontSize:24, cursor:"pointer", color: selectedRecipe.is_favourite?"#e07b4a":"#555", lineHeight:1 }} onClick={() => toggleFavourite(selectedRecipe)}>
+                  {selectedRecipe.is_favourite ? "♥" : "♡"}
+                </button>
+                <button style={{ ...s.backBtn, color:"#aaa", fontSize:14 }} onClick={() => setEditForm(editForm ? null : {
+                  title: selectedRecipe.title, category: selectedRecipe.category||"Dinner",
+                  source_url: selectedRecipe.source_url||"", photo_url: selectedRecipe.photo_url||"",
+                  ingredients: (selectedRecipe.ingredients||[]).join("\n"),
+                  steps: (selectedRecipe.steps||[]).join("\n"),
+                  servings: selectedRecipe.servings||2,
+                  prep_time: selectedRecipe.prep_time||"", cook_time: selectedRecipe.cook_time||"",
+                  notes: selectedRecipe.notes||"", rating: selectedRecipe.rating||0,
+                })}>{editForm ? "Cancel" : "✏️ Edit"}</button>
+                <button style={{ ...s.backBtn, color:"#e07b4a", fontSize:14 }} onClick={() => setConfirmDelete(true)}>Delete</button>
+              </div>
             </div>
-          </div>
-          {editForm ? (
-            <div style={{ padding:"0 16px 40px" }}>
-              <h2 style={{ ...s.formHeading, marginTop:8 }}>Edit Recipe</h2>
-              <label style={s.label}>Title</label>
-              <input style={s.input} value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
-              <label style={s.label}>Category</label>
-              <select style={s.input} value={editForm.category} onChange={e => setEditForm(f=>({...f,category:e.target.value}))}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
-              <label style={s.label}>Photo URL</label>
-              <input style={s.input} value={editForm.photo_url} onChange={e => setEditForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
-              <label style={s.label}>Source URL</label>
-              <input style={s.input} value={editForm.source_url} onChange={e => setEditForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
-              <label style={s.label}>Ingredients (one per line)</label>
-              <textarea style={s.textarea} rows={6} value={editForm.ingredients} onChange={e => setEditForm(f=>({...f,ingredients:e.target.value}))} />
-              <label style={s.label}>Steps (one per line)</label>
-              <textarea style={s.textarea} rows={6} value={editForm.steps} onChange={e => setEditForm(f=>({...f,steps:e.target.value}))} />
-              <button style={s.submitBtn} disabled={loading} onClick={() => updateRecipe(selectedRecipe.id, {
-                title: editForm.title.trim(),
-                category: editForm.category,
-                source_url: editForm.source_url.trim() || null,
-                photo_url: editForm.photo_url.trim() || null,
-                ingredients: editForm.ingredients.split("\n").filter(l => l.trim()),
-                steps: editForm.steps.split("\n").filter(l => l.trim()),
-              })}>{loading ? "Saving..." : "Save Changes"}</button>
-            </div>
-          ) : (
-            <>
-              {selectedRecipe.photo_url && <img src={selectedRecipe.photo_url} alt="" style={s.detailPhoto} />}
-              <div style={s.detailBody}>
-                <div style={s.detailCat}>{selectedRecipe.category}</div>
-                <h2 style={s.detailTitle}>{selectedRecipe.title}</h2>
-                {selectedRecipe.source_url && <a href={selectedRecipe.source_url} target="_blank" style={s.detailLink}>View original source ↗</a>}
-                <div style={s.sectionLabel}>Ingredients</div>
-                {(selectedRecipe.ingredients||[]).map((ing,i) => <div key={i} style={s.listItem}>• {ing}</div>)}
-                <div style={s.sectionLabel}>Steps</div>
-                {(selectedRecipe.steps||[]).map((step,i) => <div key={i} style={s.listItem}><span style={s.stepNum}>{i+1}</span> {step}</div>)}
-                <div style={s.sectionLabel}>Add to week plan</div>
-                <div style={s.dayGrid}>
-                  {DAYS.map(day => (
-                    <button key={day} style={{ ...s.dayBtn, ...(weekPlan[day]?.recipe_id===selectedRecipe.id?s.dayBtnActive:{}) }}
-                      onClick={() => assignDay(day, selectedRecipe.id)}>{day.slice(0,3)}</button>
+
+            {editForm ? (
+              <div style={{ padding:"0 16px 80px" }}>
+                <h2 style={{ ...s.formHeading, marginTop:8 }}>Edit Recipe</h2>
+                <label style={s.label}>Title</label>
+                <input style={s.input} value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
+                <label style={s.label}>Category</label>
+                <select style={s.input} value={editForm.category} onChange={e => setEditForm(f=>({...f,category:e.target.value}))}>
+                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div>
+                    <label style={s.label}>Prep time</label>
+                    <input style={s.input} value={editForm.prep_time} onChange={e => setEditForm(f=>({...f,prep_time:e.target.value}))} placeholder="e.g. 10 min" />
+                  </div>
+                  <div>
+                    <label style={s.label}>Cook time</label>
+                    <input style={s.input} value={editForm.cook_time} onChange={e => setEditForm(f=>({...f,cook_time:e.target.value}))} placeholder="e.g. 30 min" />
+                  </div>
+                </div>
+                <label style={s.label}>Servings</label>
+                <input style={s.input} type="number" min="1" value={editForm.servings} onChange={e => setEditForm(f=>({...f,servings:e.target.value}))} />
+                <label style={s.label}>Photo URL</label>
+                <input style={s.input} value={editForm.photo_url} onChange={e => setEditForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
+                <label style={s.label}>Source URL</label>
+                <input style={s.input} value={editForm.source_url} onChange={e => setEditForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
+                <label style={s.label}>Your Notes</label>
+                <textarea style={s.textarea} rows={3} value={editForm.notes} onChange={e => setEditForm(f=>({...f,notes:e.target.value}))} placeholder="e.g. Add more garlic next time!" />
+                <label style={s.label}>Rating</label>
+                <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                  {[1,2,3,4,5].map(n => (
+                    <button key={n} onClick={() => setEditForm(f=>({...f,rating:n}))}
+                      style={{ background:"none", border:"none", fontSize:28, cursor:"pointer", color: n <= editForm.rating ? "#e07b4a" : "#333", padding:0 }}>★</button>
                   ))}
                 </div>
-                <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
+                <label style={s.label}>Ingredients (one per line)</label>
+                <textarea style={s.textarea} rows={6} value={editForm.ingredients} onChange={e => setEditForm(f=>({...f,ingredients:e.target.value}))} />
+                <label style={s.label}>Steps (one per line)</label>
+                <textarea style={s.textarea} rows={6} value={editForm.steps} onChange={e => setEditForm(f=>({...f,steps:e.target.value}))} />
+                <button style={s.submitBtn} disabled={loading} onClick={() => updateRecipe(selectedRecipe.id, {
+                  title: editForm.title.trim(), category: editForm.category,
+                  source_url: editForm.source_url.trim()||null, photo_url: editForm.photo_url.trim()||null,
+                  ingredients: editForm.ingredients.split("\n").filter(l=>l.trim()),
+                  steps: editForm.steps.split("\n").filter(l=>l.trim()),
+                  servings: parseInt(editForm.servings)||2,
+                  prep_time: editForm.prep_time.trim()||null, cook_time: editForm.cook_time.trim()||null,
+                  notes: editForm.notes.trim()||null, rating: editForm.rating||0,
+                })}>{loading?"Saving...":"Save Changes"}</button>
               </div>
-            </>
-          )}
-        </div>
-      );
+            ) : (
+              <>
+                {selectedRecipe.photo_url && <img src={selectedRecipe.photo_url} alt="" style={s.detailPhoto} />}
+                <div style={s.detailBody}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                    <div style={{ flex:1 }}>
+                      <div style={s.detailCat}>{selectedRecipe.category}</div>
+                      <h2 style={s.detailTitle}>{selectedRecipe.title}</h2>
+                    </div>
+                    {selectedRecipe.rating > 0 && (
+                      <div style={{ color:"#e07b4a", fontSize:16, marginTop:8, flexShrink:0 }}>{"★".repeat(selectedRecipe.rating)}{"☆".repeat(5-selectedRecipe.rating)}</div>
+                    )}
+                  </div>
 
+                  {/* Time + servings info bar */}
+                  {(selectedRecipe.prep_time || selectedRecipe.cook_time) && (
+                    <div style={{ display:"flex", gap:16, marginBottom:12 }}>
+                      {selectedRecipe.prep_time && <span style={{ color:"#888", fontSize:13 }}>⏱ Prep: {selectedRecipe.prep_time}</span>}
+                      {selectedRecipe.cook_time && <span style={{ color:"#888", fontSize:13 }}>🍳 Cook: {selectedRecipe.cook_time}</span>}
+                    </div>
+                  )}
+
+                  {selectedRecipe.notes && <div style={{ color:"#aaa", fontSize:13, fontStyle:"italic", marginBottom:12, background:"#1a1a1a", borderRadius:8, padding:"8px 12px" }}>💬 {selectedRecipe.notes}</div>}
+                  {selectedRecipe.source_url && <a href={selectedRecipe.source_url} target="_blank" style={s.detailLink}>View original source ↗</a>}
+
+                  {/* Servings scaler */}
+                  <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:4, marginBottom:4, background:"#1a1a1a", borderRadius:10, padding:"10px 14px" }}>
+                    <span style={{ color:"#888", fontSize:13, flex:1 }}>Servings</span>
+                    <button onClick={() => setServingsScale(s => Math.max(s - 0.5, 0.5))} style={{ background:"#2a2a2a", border:"none", color:"#fff", borderRadius:6, width:30, height:30, cursor:"pointer", fontSize:18, lineHeight:1 }}>−</button>
+                    <span style={{ color:"#fff", fontSize:16, fontWeight:700, minWidth:30, textAlign:"center" }}>{scaledServings}</span>
+                    <button onClick={() => setServingsScale(s => s + 0.5)} style={{ background:"#2a2a2a", border:"none", color:"#fff", borderRadius:6, width:30, height:30, cursor:"pointer", fontSize:18, lineHeight:1 }}>+</button>
+                    {servingsScale !== 1 && <span style={{ color:"#555", fontSize:11 }}>base {baseServings}</span>}
+                  </div>
+
+                  <div style={s.sectionLabel}>Ingredients</div>
+                  {(selectedRecipe.ingredients||[]).map((ing,i) => (
+                    <div key={i} style={s.listItem}>• {scaleIngredient(ing, servingsScale)}</div>
+                  ))}
+
+                  <div style={s.sectionLabel}>Steps</div>
+                  {(selectedRecipe.steps||[]).map((step,i) => (
+                    <div key={i} style={s.listItem}><span style={s.stepNum}>{i+1}</span> {step}</div>
+                  ))}
+
+                  <div style={s.sectionLabel}>Add to plan</div>
+                  <div style={{ color:"#666", fontSize:12, marginBottom:10 }}>Tap a date to plan this recipe</div>
+                  <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:8, marginBottom:16 }}>
+                    {rollingDays.map(d => {
+                      const dk = dateToKey(d);
+                      const isToday = dk === todayKey;
+                      const isPlanned = plannerData[dk]?.recipe_id === selectedRecipe.id;
+                      return (
+                        <div key={dk} onClick={() => assignDay(dk, selectedRecipe.id)}
+                          style={{ flexShrink:0, textAlign:"center", cursor:"pointer", padding:"8px 10px", borderRadius:10,
+                            background: isPlanned ? "#e07b4a" : isToday ? "#2a2a2a" : "#1a1a1a",
+                            border: isToday ? "1px solid #e07b4a" : "1px solid #2a2a2a" }}>
+                          <div style={{ fontSize:10, color: isPlanned?"#fff":"#888" }}>{DAY_NAMES[d.getDay()].slice(0,3)}</div>
+                          <div style={{ fontSize:14, fontWeight:700, color: isPlanned?"#fff": isToday?"#e07b4a":"#ccc" }}>{d.getDate()}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+
+      // ─── MAIN VIEWS ───────────────────────────────────────────────────────
       return (
         <div style={s.app}>
           {toast && <div style={s.toast}>{toast}</div>}
           <div style={s.header}><span style={s.headerTitle}>🍽️ Our Recipes</span></div>
           <div style={s.content}>
 
+            {/* LIBRARY */}
             {view === "library" && (
               <div>
-                <input style={s.searchInput} placeholder="Search recipes..." value={search} onChange={e => setSearch(e.target.value)} />
+                {/* Tonight banner */}
+                {tonightRecipe && (
+                  <div onClick={() => { setSelectedRecipe(tonightRecipe); setPrevView("library"); setServingsScale(1); setView("detail"); }}
+                    style={{ background:"#1e1218", border:"1px solid #5a1a3a", borderRadius:14, padding:"12px 14px", marginBottom:16, cursor:"pointer", display:"flex", alignItems:"center", gap:12 }}>
+                    {tonightRecipe.photo_url
+                      ? <img src={tonightRecipe.photo_url} style={{ width:48, height:48, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
+                      : <div style={{ width:48, height:48, borderRadius:8, background:"#333", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🍴</div>}
+                    <div>
+                      <div style={{ fontSize:10, color:"#e07b4a", textTransform:"uppercase", letterSpacing:1.5, marginBottom:2 }}>Tonight's Dinner</div>
+                      <div style={{ color:"#fff", fontSize:15, fontWeight:600 }}>{tonightRecipe.title}</div>
+                    </div>
+                    <div style={{ marginLeft:"auto", color:"#888", fontSize:18 }}>›</div>
+                  </div>
+                )}
+
+                {/* Search + sort row */}
+                <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+                  <input style={{ ...s.searchInput, marginBottom:0, flex:1 }} placeholder="Search recipes..." value={search} onChange={e => setSearch(e.target.value)} />
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                    style={{ background:"#1e1e1e", border:"1px solid #333", borderRadius:10, color:"#aaa", padding:"0 10px", fontSize:13, flexShrink:0 }}>
+                    <option value="newest">New</option>
+                    <option value="az">A–Z</option>
+                    <option value="rating">★</option>
+                  </select>
+                </div>
+
                 <div style={s.catRow}>
+                  <button style={{ ...s.catBtn, ...(filterFav?{background:"#e07b4a",border:"1px solid #e07b4a",color:"#fff"}:{}) }} onClick={() => { setFilterFav(f=>!f); setFilterCat("All"); }}>♥ Faves</button>
                   {["All",...CATEGORIES].map(c => (
-                    <button key={c} style={{ ...s.catBtn, ...(filterCat===c?s.catBtnActive:{}) }} onClick={() => setFilterCat(c)}>{c}</button>
+                    <button key={c} style={{ ...s.catBtn, ...(filterCat===c&&!filterFav?s.catBtnActive:{}) }} onClick={() => { setFilterCat(c); setFilterFav(false); }}>{c}</button>
                   ))}
                 </div>
-                {filteredRecipes.length===0 && <div style={s.empty}>No recipes yet. Add one!</div>}
+
+                {filteredRecipes.length===0 && <div style={s.empty}>{recipes.length===0?"No recipes yet. Add one!":"No recipes match."}</div>}
                 <div style={s.recipeGrid}>
-                  {filteredRecipes.map(r => (
-                    <div key={r.id} style={s.recipeCard} onClick={() => { setSelectedRecipe(r); setView("detail"); }}>
-                      {r.photo_url ? <img src={r.photo_url} alt="" style={s.recipeThumb} /> : <div style={s.recipePlaceholder}>🍴</div>}
-                      <div style={s.recipeCardBody}>
-                        <div style={s.recipeCardCat}>{r.category}</div>
-                        <div style={s.recipeCardTitle}>{r.title}</div>
+                  {filteredRecipes.map(r => {
+                    const plannedDates = Object.entries(plannerData).filter(([k,v]) => v?.recipe_id === r.id).map(([k]) => k);
+                    const upcomingDates = plannedDates.filter(k => k >= todayKey);
+                    return (
+                      <div key={r.id} style={s.recipeCard} onClick={() => { setSelectedRecipe(r); setPrevView("library"); setServingsScale(1); setView("detail"); }}>
+                        {r.is_favourite && <div style={{ position:"absolute", top:6, right:8, fontSize:16, color:"#e07b4a", zIndex:1 }}>♥</div>}
+                        {r.photo_url ? <img src={r.photo_url} alt="" style={s.recipeThumb} /> : <div style={s.recipePlaceholder}>🍴</div>}
+                        <div style={s.recipeCardBody}>
+                          <div style={s.recipeCardCat}>{r.category}</div>
+                          <div style={s.recipeCardTitle}>{r.title}</div>
+                          {(r.prep_time||r.cook_time) && <div style={{ fontSize:10, color:"#666", marginTop:3 }}>{[r.prep_time&&`⏱${r.prep_time}`,r.cook_time&&`🍳${r.cook_time}`].filter(Boolean).join(" · ")}</div>}
+                          {upcomingDates.length > 0 && <div style={{ fontSize:10, color:"#888", marginTop:3 }}>📅 {upcomingDates.length > 1 ? `${upcomingDates.length} days planned` : new Date(upcomingDates[0]+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</div>}
+                          {r.rating > 0 && <div style={{ fontSize:11, color:"#e07b4a", marginTop:2 }}>{"★".repeat(r.rating)}</div>}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
+            {/* ADD RECIPE */}
             {view === "add" && (
               <div style={s.formWrap}>
                 <h2 style={s.formHeading}>Add Recipe</h2>
                 <div style={s.uploadBox}>
                   <div style={s.uploadLabel}>📎 Upload from Claude JSON</div>
-                  <label style={s.uploadBtn}>Choose file<input type="file" accept=".json" style={{ display:"none" }} onChange={handleJsonUpload} /></label>
+                  <label style={s.uploadBtn}>
+                    Choose file
+                    <input ref={fileInputRef} type="file" accept=".json" style={{ display:"none" }} onChange={handleJsonUpload} />
+                  </label>
                   {uploadError && <div style={{ color:"#e07b4a", fontSize:13, marginTop:6 }}>{uploadError}</div>}
                 </div>
                 <div style={s.divider}>— or fill in manually —</div>
@@ -409,6 +736,18 @@
                 <select style={s.input} value={form.category} onChange={e => setForm(f=>({...f,category:e.target.value}))}>
                   {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div>
+                    <label style={s.label}>Prep time</label>
+                    <input style={s.input} value={form.prep_time} onChange={e => setForm(f=>({...f,prep_time:e.target.value}))} placeholder="10 min" />
+                  </div>
+                  <div>
+                    <label style={s.label}>Cook time</label>
+                    <input style={s.input} value={form.cook_time} onChange={e => setForm(f=>({...f,cook_time:e.target.value}))} placeholder="30 min" />
+                  </div>
+                </div>
+                <label style={s.label}>Servings</label>
+                <input style={s.input} type="number" min="1" value={form.servings} onChange={e => setForm(f=>({...f,servings:e.target.value}))} />
                 <label style={s.label}>Source URL (optional)</label>
                 <input style={s.input} value={form.source_url} onChange={e => setForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
                 <label style={s.label}>Photo URL (optional)</label>
@@ -422,69 +761,120 @@
               </div>
             )}
 
+            {/* ROLLING PLANNER */}
             {view === "planner" && (
               <div>
-                <h2 style={s.formHeading}>This Week's Dinners</h2>
-                {DAYS.map(day => {
-                  const row = weekPlan[day]; const recipe = row?.recipes;
+                <h2 style={{ ...s.formHeading, marginBottom:16 }}>Meal Planner</h2>
+                {rollingDays.map(d => {
+                  const dk = dateToKey(d);
+                  const row = plannerData[dk];
+                  const recipe = row?.recipes;
+                  const isToday = dk === todayKey;
+                  const isPast = dk < todayKey;
                   return (
-                    <div key={day} style={s.plannerRow}>
-                      <div style={s.plannerDay}>{day}</div>
+                    <div key={dk} style={{ ...s.plannerRow, ...(isToday?{border:"1px solid #e07b4a", background:"#1e1510"}:{}), ...(isPast?{opacity:0.55}:{}) }}>
+                      <div style={{ width:72, flexShrink:0 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color: isToday?"#e07b4a":"#666" }}>
+                          {DAY_NAMES[d.getDay()].slice(0,3).toUpperCase()}
+                          {isToday && <span style={{ fontSize:8, display:"block", letterSpacing:1 }}>TODAY</span>}
+                        </div>
+                        <div style={{ fontSize:11, color:"#555" }}>{d.getDate()} {SHORT_MONTHS[d.getMonth()]}</div>
+                      </div>
                       {recipe
                         ? <div style={s.plannerRecipe}>
                             {recipe.photo_url
                               ? <img src={recipe.photo_url} style={{ width:44, height:44, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
                               : <div style={{ width:44, height:44, borderRadius:8, background:"#222", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🍴</div>}
-                            <span style={s.plannerRecipeName} onClick={() => { setSelectedRecipe(recipe); setView("detail"); }}>{recipe.title}</span>
-                            <button style={s.plannerRemove} onClick={() => unassignDay(day)}>✕</button>
+                            <span style={s.plannerRecipeName} onClick={() => { setSelectedRecipe(recipe); setPrevView("planner"); setServingsScale(1); setView("detail"); }}>{recipe.title}</span>
+                            <button style={s.plannerRemove} onClick={() => unassignDay(dk)}>✕</button>
                           </div>
                         : <div style={{ flex:1 }}>
-                            <div style={{ color:"#555", fontSize:13, marginBottom:8 }}>Pick a recipe:</div>
-                            <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
-                              {recipes.map(r => (
-                                <div key={r.id} onClick={() => assignDay(day, r.id)}
-                                  style={{ flexShrink:0, width:64, cursor:"pointer", textAlign:"center" }}>
-                                  {r.photo_url
-                                    ? <img src={r.photo_url} style={{ width:64, height:64, borderRadius:10, objectFit:"cover", border:"2px solid #333" }} />
-                                    : <div style={{ width:64, height:64, borderRadius:10, background:"#222", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, border:"2px solid #333" }}>🍴</div>}
-                                  <div style={{ fontSize:10, color:"#aaa", marginTop:4, lineHeight:1.2, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{r.title}</div>
-                                </div>
-                              ))}
-                            </div>
+                            <button onClick={() => { setPickerDay(dk); setPickerSearch(""); }}
+                              style={{ background:"#1a1a1a", border:"1px dashed #333", borderRadius:10, color:"#555", fontSize:13, padding:"8px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+                              <span style={{ color:"#e07b4a", fontSize:16 }}>+</span> Add
+                            </button>
                           </div>}
                     </div>
                   );
                 })}
+
+                {/* Recipe picker overlay */}
+                {pickerDay && (
+                  <div style={s.overlay}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:"#1a1a1a", borderBottom:"1px solid #2a2a2a", flexShrink:0 }}>
+                      <span style={{ color:"#fff", fontSize:16, fontWeight:700 }}>
+                        Pick for {DAY_NAMES[new Date(pickerDay+"T12:00:00").getDay()]} {new Date(pickerDay+"T12:00:00").getDate()} {SHORT_MONTHS[new Date(pickerDay+"T12:00:00").getMonth()]}
+                      </span>
+                      <button onClick={() => setPickerDay(null)} style={{ background:"none", border:"none", color:"#aaa", fontSize:22, cursor:"pointer" }}>✕</button>
+                    </div>
+                    <div style={{ padding:"12px 16px 8px", flexShrink:0 }}>
+                      <input style={s.searchInput} placeholder="Search recipes..." value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} autoFocus />
+                    </div>
+                    <div style={{ overflowY:"auto", flex:1 }}>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, padding:"0 16px 24px" }}>
+                        {recipes.filter(r => r.title.toLowerCase().includes(pickerSearch.toLowerCase())).map(r => (
+                          <div key={r.id} onClick={() => { assignDay(pickerDay, r.id); setPickerDay(null); }}
+                            style={{ background:"#1a1a1a", borderRadius:14, overflow:"hidden", cursor:"pointer", border:"1px solid #2a2a2a" }}>
+                            {r.photo_url ? <img src={r.photo_url} alt="" style={{ width:"100%", height:110, objectFit:"cover" }} /> : <div style={{ width:"100%", height:110, background:"#222", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 }}>🍴</div>}
+                            <div style={{ padding:"8px 10px 10px" }}>
+                              <div style={{ fontSize:11, color:"#e07b4a", textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>{r.category}</div>
+                              <div style={{ fontSize:13, color:"#fff", fontWeight:600, lineHeight:1.3 }}>{r.title}</div>
+                              {r.rating > 0 && <div style={{ fontSize:10, color:"#e07b4a", marginTop:2 }}>{"★".repeat(r.rating)}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
+            {/* SHOPPING LIST */}
             {view === "shopping" && (
               <div>
-                <h2 style={s.formHeading}>Shopping List</h2>
-                {Object.keys(weekPlan).length===0
-                  ? <div style={s.empty}>Plan your week first!</div>
-                  : (() => {
-                      const seen = {};
-                      DAYS.forEach(day => {
-                        const row = weekPlan[day]; if (!row?.recipes) return;
-                        (row.recipes.ingredients || []).forEach(ing => {
-                          const key = ing.trim().toLowerCase();
-                          if (!seen[key]) seen[key] = ing.trim();
-                        });
-                      });
-                      const allIngs = Object.values(seen);
-                      if (allIngs.length === 0) return <div style={s.empty}>No ingredients found.</div>;
-                      return <>
-                        <div style={{ color:"#888", fontSize:13, marginBottom:12 }}>Tick what you already have</div>
-                        {allIngs.map((ing, i) => (
-                          <div key={i} style={s.shopItem} onClick={() => setShoppingChecked(c=>({...c,[i]:!c[i]}))}>
-                            <div style={{ ...s.shopCheck, ...(shoppingChecked[i]?s.shopCheckDone:{}) }}>{shoppingChecked[i]?"✓":""}</div>
-                            <span style={{ textDecoration:shoppingChecked[i]?"line-through":"none", color:shoppingChecked[i]?"#555":"#eee" }}>{ing}</span>
-                          </div>
-                        ))}
-                      </>;
-                    })()
-                }
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                  <h2 style={{ ...s.formHeading, marginBottom:0 }}>Shopping List</h2>
+                  {Object.keys(shopTicks).length > 0 && (
+                    <button onClick={async () => {
+                      await sbDelete("shopping_ticks", `week_start=eq.${weekStart}`);
+                      setShopTicks({});
+                      showToast("Ticks cleared!");
+                    }} style={{ background:"#1e1e1e", border:"1px solid #333", borderRadius:8, color:"#aaa", fontSize:12, padding:"6px 12px", cursor:"pointer" }}>Clear ticks</button>
+                  )}
+                </div>
+                {(() => {
+                  const groups = buildShopGroups();
+                  const allGroups = [...Object.keys(SHOP_GROUPS), "Other"].filter(g => groups[g]?.length > 0);
+                  if (allGroups.length === 0) return <div style={s.empty}>Plan your week first to generate a list!</div>;
+                  return <>
+                    <div style={{ color:"#888", fontSize:13, marginBottom:16 }}>This week's ingredients — synced for both of you.</div>
+                    {allGroups.map(g => {
+                      const ings = groups[g];
+                      const unticked = ings.filter(i => !shopTicks[i]);
+                      const ticked = ings.filter(i => shopTicks[i]);
+                      return (
+                        <div key={g} style={s.shopGroup}>
+                          <div style={s.shopGroupLabel}>{g} {ticked.length > 0 && <span style={{ color:"#555", fontWeight:400 }}>({ticked.length}/{ings.length})</span>}</div>
+                          {/* Unticked first */}
+                          {unticked.map((ing, i) => (
+                            <div key={i} style={s.shopItem} onClick={() => toggleShopTick(ing)}>
+                              <div style={s.shopCheck}></div>
+                              <span style={{ color:"#eee" }}>{ing}</span>
+                            </div>
+                          ))}
+                          {/* Ticked at bottom */}
+                          {ticked.map((ing, i) => (
+                            <div key={i} style={s.shopItem} onClick={() => toggleShopTick(ing)}>
+                              <div style={{ ...s.shopCheck, ...s.shopCheckDone }}>✓</div>
+                              <span style={{ textDecoration:"line-through", color:"#444" }}>{ing}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </>;
+                })()}
               </div>
             )}
           </div>
