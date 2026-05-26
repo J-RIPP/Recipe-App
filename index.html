@@ -15,20 +15,23 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0d1a14; font-family: Georgia, serif; }
-    input, select, textarea, button { font-family: Georgia, serif; outline: none; }
+    input, select, textarea, button { font-family: Georgia, serif; }
+    input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid #7bc87a; outline-offset: 2px; }
     ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-track { background: #0d1a14; }
     ::-webkit-scrollbar-thumb { background: #2a4a35; border-radius: 2px; }
+    img { loading: lazy; }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useMemo } = React;
 
     const SB_URL = "https://tkpwseiasagnzerodiwl.supabase.co";
     const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ";
     const CORRECT_PIN = "0412";
+    const PIN_REMEMBER_DAYS = 7;
     const CATEGORIES = ["Breakfast","Lunch","Dinner","Snack","Dessert","Other"];
     const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -36,10 +39,10 @@
     const SHOP_GROUPS = {
       "Frozen": ["frozen","ice"],
       "Produce": ["onion","garlic","tomato","pepper","carrot","potato","lettuce","spinach","rocket","avocado","lemon","lime","cucumber","mushroom","courgette","broccoli","coriander","parsley","basil","herb","vegetable","veg","salad","spring onion","celery","leek","ginger","chilli","aubergine","corn","pea","edamame","sweetcorn","kale","cabbage","asparagus","fennel","artichoke","radish","beetroot","squash","pumpkin"],
-      "Meat & Fish": ["chicken","beef","lamb","pork","salmon","tuna","fish","mince","steak","bacon","sausage","tofu","prawns","shrimp","turkey","duck","halloumi","tofu"],
+      "Meat & Fish": ["chicken","beef","lamb","pork","salmon","tuna","fish","mince","steak","bacon","sausage","tofu","prawns","shrimp","turkey","duck","halloumi"],
       "Dairy & Eggs": ["egg","milk","cream","butter","cheese","parmesan","feta","mozzarella","yogurt","yoghurt","brie","ricotta","cheddar","goat cheese","creme fraiche","mascarpone"],
       "Pasta & Grains": ["pasta","rice","noodle","orzo","gnocchi","quinoa","couscous","bread","flour","oat","muffin","tortilla","wrap","pitta","bagel","crouton"],
-      "Tins & Jars": ["tin","can","canned","chopped tomato","stock","sauce","mayo","ketchup","mustard","vinegar","jam","honey","syrup","soy","peri peri","harissa","miso","tahini","pesto","sriracha","chilli jam","kimchi","pickle","olive","anchovy","coconut milk"],
+      "Tins & Jars": ["tin","can","canned","chopped tomato","stock","sauce","mayo","ketchup","mustard","vinegar","jam","honey","syrup","soy","peri peri","harissa","miso","tahini","pesto","sriracha","chilli jam","kimchi","pickle","olives","anchovy","coconut milk"],
       "Pantry": ["oil","salt","pepper","spice","paprika","cumin","turmeric","cinnamon","sugar","cornflour","baking","seasoning","chili flakes","chilli flakes","garlic granules","smoked paprika","dried","curry","garam","cajun","za'atar","ras el hanout","stock cube"],
     };
 
@@ -51,7 +54,6 @@
       return "Other";
     }
 
-    // Returns array of date objects: 7 days back, today, 7 days forward
     function getRollingDays() {
       const days = [];
       const today = new Date();
@@ -64,17 +66,14 @@
       return days;
     }
 
-    function dateToKey(d) {
-      return d.toISOString().split("T")[0];
-    }
+    function dateToKey(d) { return d.toISOString().split("T")[0]; }
 
-    function formatDayLabel(d) {
-      const name = DAY_NAMES[d.getDay()];
-      return `${name.slice(0,3)} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
+    function formatCookDate(dateStr) {
+      const d = new Date(dateStr + "T12:00:00");
+      return `${DAY_NAMES[d.getDay()].slice(0,3)} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
     }
 
     function getMonday(d = new Date()) {
-      // If d is a string like "2026-05-24", parse with noon time to avoid UTC timezone shift
       const copy = typeof d === "string" ? new Date(d + "T12:00:00") : new Date(d);
       const day = copy.getDay();
       const diff = copy.getDate() - day + (day === 0 ? -6 : 1);
@@ -130,86 +129,93 @@
       } catch(e) { console.error("sbUpsert error", e); return null; }
     }
 
+    // ── Style tokens ────────────────────────────────────────────────────────
+    const C = {
+      bg: "#0d1a14", surface: "#111f18", surface2: "#1a2e22", surface3: "#1e3528",
+      border: "#2a4a35", border2: "#1e3528",
+      accent: "#7bc87a", accentDim: "#5a9a5a",
+      text: "#e8f5e2", textSub: "#6a9a78", textMuted: "#4a7a58", textFaint: "#2d5b3f",
+      danger: "#c0524a", done: "#5cb85c",
+    };
+
     const s = {
-      pinScreen: { minHeight:"100vh", background:"#0d1a14", display:"flex", alignItems:"center", justifyContent:"center", padding:20 },
-      pinCard: { background:"#111f18", borderRadius:24, padding:"40px 32px", maxWidth:320, width:"100%", textAlign:"center" },
-      pinLogo: { fontSize:48, marginBottom:8 },
-      pinTitle: { color:"#e8f5e2", fontSize:28, margin:"0 0 4px" },
-      pinSub: { color:"#5a8a68", fontSize:14, marginBottom:8 },
+      pinScreen: { minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:20 },
+      pinCard: { background:C.surface, borderRadius:24, padding:"40px 32px", maxWidth:320, width:"100%", textAlign:"center" },
+      pinTitle: { color:C.text, fontSize:28, margin:"0 0 4px" },
+      pinSub: { color:C.textSub, fontSize:14, marginBottom:8 },
       pinDot: { width:14, height:14, borderRadius:"50%", transition:"background 0.2s" },
       pinGrid: { display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, margin:"0 auto 16px", maxWidth:220 },
-      pinBtn: { background:"#1e3528", border:"none", borderRadius:12, color:"#e8f5e2", fontSize:20, padding:"14px 0", cursor:"pointer" },
-      app: { minHeight:"100vh", background:"#0d1a14", color:"#e8f5e2", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto", position:"relative" },
-      header: { background:"#111f18", padding:"16px 20px", borderBottom:"1px solid #1e3528", position:"sticky", top:0, zIndex:10 },
-      headerTitle: { fontSize:20, fontWeight:700, color:"#e8f5e2" },
+      pinBtn: { background:C.surface3, border:"none", borderRadius:12, color:C.text, fontSize:20, padding:"14px 0", cursor:"pointer", minWidth:44, minHeight:44 },
+      app: { minHeight:"100vh", background:C.bg, color:C.text, display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto", position:"relative" },
+      header: { background:C.surface, padding:"16px 20px", borderBottom:`1px solid ${C.border2}`, position:"sticky", top:0, zIndex:10 },
+      headerTitle: { fontSize:20, fontWeight:700, color:C.text },
       content: { flex:1, padding:"16px 16px 90px", overflowY:"auto" },
-      toast: { position:"fixed", top:20, left:"50%", transform:"translateX(-50%)", background:"#7bc87a", color:"#e8f5e2", padding:"10px 24px", borderRadius:20, fontSize:14, zIndex:100, whiteSpace:"nowrap" },
-      searchInput: { width:"100%", background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:10, color:"#e8f5e2", padding:"10px 14px", fontSize:15, marginBottom:10 },
+      toast: { position:"fixed", top:20, left:"50%", transform:"translateX(-50%)", background:C.accent, color:C.bg, padding:"10px 24px", borderRadius:20, fontSize:14, zIndex:200, whiteSpace:"nowrap", fontWeight:600 },
+      searchInput: { width:"100%", background:C.surface2, border:`1px solid ${C.border}`, borderRadius:10, color:C.text, padding:"10px 14px", fontSize:15, marginBottom:10 },
       catRow: { display:"flex", gap:8, overflowX:"auto", paddingBottom:8, marginBottom:12 },
-      catBtn: { background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:20, color:"#6a9a78", padding:"6px 14px", fontSize:13, whiteSpace:"nowrap", cursor:"pointer", flexShrink:0 },
-      catBtnActive: { background:"#7bc87a", border:"1px solid #e07b4a", color:"#e8f5e2" },
-      empty: { color:"#3d6b4f", textAlign:"center", marginTop:60, fontSize:15 },
+      catBtn: { background:C.surface2, border:`1px solid ${C.border}`, borderRadius:20, color:C.textSub, padding:"6px 14px", fontSize:13, whiteSpace:"nowrap", cursor:"pointer", flexShrink:0, minHeight:36 },
+      catBtnActive: { background:C.accent, border:`1px solid ${C.accent}`, color:C.bg },
+      empty: { color:C.textSub, textAlign:"center", marginTop:60, fontSize:15 },
       recipeGrid: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 },
-      recipeCard: { background:"#111f18", borderRadius:14, overflow:"hidden", cursor:"pointer", border:"1px solid #2a4a35", position:"relative" },
+      recipeCard: { background:C.surface, borderRadius:14, overflow:"hidden", cursor:"pointer", border:`1px solid ${C.border}`, position:"relative" },
       recipeThumb: { width:"100%", height:110, objectFit:"cover" },
-      recipePlaceholder: { width:"100%", height:110, background:"#0f1c15", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 },
+      recipePlaceholder: { width:"100%", height:110, background:C.surface3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 },
       recipeCardBody: { padding:"10px 12px 12px" },
-      recipeCardCat: { fontSize:11, color:"#7bc87a", textTransform:"uppercase", letterSpacing:1, marginBottom:3 },
-      recipeCardTitle: { fontSize:14, color:"#e8f5e2", fontWeight:600, lineHeight:1.3 },
-      screen: { minHeight:"100vh", background:"#0d1a14", color:"#e8f5e2", maxWidth:480, margin:"0 auto", paddingBottom:40 },
-      detailHeader: { display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 16px" },
-      backBtn: { background:"none", border:"none", color:"#6a9a78", fontSize:15, cursor:"pointer", padding:0 },
+      recipeCardCat: { fontSize:11, color:C.accent, textTransform:"uppercase", letterSpacing:1, marginBottom:3 },
+      recipeCardTitle: { fontSize:14, color:C.text, fontWeight:600, lineHeight:1.3 },
+      screen: { minHeight:"100vh", background:C.bg, color:C.text, maxWidth:480, margin:"0 auto", paddingBottom:40, overflowY:"auto" },
+      detailHeader: { display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 16px", position:"sticky", top:0, zIndex:10, background:C.bg },
+      backBtn: { background:"none", border:"none", color:C.textSub, fontSize:15, cursor:"pointer", padding:"8px 4px", minWidth:44, minHeight:44, display:"flex", alignItems:"center" },
       detailPhoto: { width:"100%", height:220, objectFit:"cover" },
       detailBody: { padding:"16px 16px 40px" },
-      detailCat: { fontSize:11, color:"#7bc87a", textTransform:"uppercase", letterSpacing:1, marginBottom:6 },
-      detailTitle: { fontSize:26, color:"#e8f5e2", margin:"0 0 8px" },
-      detailLink: { color:"#7bc87a", fontSize:13, display:"block", marginBottom:16 },
-      sectionLabel: { fontSize:12, color:"#5a8a68", textTransform:"uppercase", letterSpacing:1.5, marginTop:20, marginBottom:10, borderBottom:"1px solid #1e3528", paddingBottom:6 },
+      detailCat: { fontSize:11, color:C.accent, textTransform:"uppercase", letterSpacing:1, marginBottom:6 },
+      detailTitle: { fontSize:26, color:C.text, margin:"0 0 8px" },
+      detailLink: { color:C.accent, fontSize:13, display:"block", marginBottom:16 },
+      sectionLabel: { fontSize:12, color:C.textSub, textTransform:"uppercase", letterSpacing:1.5, marginTop:20, marginBottom:10, borderBottom:`1px solid ${C.border2}`, paddingBottom:6 },
       listItem: { color:"#d4eeca", fontSize:15, marginBottom:6, lineHeight:1.5, display:"flex", gap:8 },
-      stepNum: { background:"#7bc87a", color:"#e8f5e2", borderRadius:"50%", width:22, height:22, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:12, flexShrink:0, marginTop:1 },
-      dayGrid: { display:"flex", gap:8, flexWrap:"wrap", marginBottom:20 },
-      dayBtn: { background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:8, color:"#6a9a78", padding:"8px 12px", fontSize:13, cursor:"pointer" },
-      dayBtnActive: { background:"#7bc87a", border:"1px solid #e07b4a", color:"#e8f5e2" },
-      cookBtn: { background:"#7bc87a", border:"none", borderRadius:12, color:"#e8f5e2", fontSize:16, fontWeight:700, padding:"14px 0", width:"100%", cursor:"pointer", marginTop:8 },
-      cookScreen: { minHeight:"100vh", background:"#080f0a", color:"#e8f5e2", maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column" },
-      cookHeader: { display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:"#111f18" },
-      cookTitle: { fontSize:16, fontWeight:600, color:"#e8f5e2" },
+      stepNum: { background:C.accent, color:C.bg, borderRadius:"50%", width:22, height:22, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:12, flexShrink:0, marginTop:1 },
+      dayBtn: { background:C.surface2, border:`1px solid ${C.border}`, borderRadius:8, color:C.textSub, padding:"8px 12px", fontSize:13, cursor:"pointer", minHeight:36 },
+      dayBtnActive: { background:C.accent, border:`1px solid ${C.accent}`, color:C.bg },
+      cookBtn: { background:C.accent, border:"none", borderRadius:12, color:C.bg, fontSize:16, fontWeight:700, padding:"14px 0", width:"100%", cursor:"pointer", marginTop:8, minHeight:48 },
+      cookScreen: { minHeight:"100vh", background:"#080f0a", color:C.text, maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column" },
+      cookHeader: { display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:C.surface },
+      cookTitle: { fontSize:16, fontWeight:600, color:C.text },
       cookBody: { flex:1, padding:"32px 20px 20px", display:"flex", flexDirection:"column" },
-      cookStepNum: { fontSize:13, color:"#7bc87a", textTransform:"uppercase", letterSpacing:2, marginBottom:16 },
-      cookStepText: { fontSize:22, color:"#e8f5e2", lineHeight:1.6, flex:1 },
+      cookStepNum: { fontSize:13, color:C.accent, textTransform:"uppercase", letterSpacing:2, marginBottom:16 },
+      cookStepText: { fontSize:22, color:C.text, lineHeight:1.6, flex:1 },
       cookNav: { display:"flex", gap:12, marginTop:32, marginBottom:24 },
-      cookNavBtn: { flex:1, background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:12, color:"#e8f5e2", fontSize:16, padding:"14px 0", cursor:"pointer" },
-      cookIngBox: { background:"#111f18", borderRadius:14, padding:"14px 16px" },
-      cookIngTitle: { fontSize:12, color:"#5a8a68", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 },
+      cookNavBtn: { flex:1, background:C.surface2, border:`1px solid ${C.border}`, borderRadius:12, color:C.text, fontSize:16, padding:"14px 0", cursor:"pointer", minHeight:48 },
+      cookIngBox: { background:C.surface, borderRadius:14, padding:"14px 16px" },
+      cookIngTitle: { fontSize:12, color:C.textSub, textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 },
       cookIng: { color:"#c8e6c0", fontSize:14, marginBottom:4 },
       formWrap: { paddingBottom:40 },
-      formHeading: { color:"#e8f5e2", fontSize:22, marginBottom:16 },
-      uploadBox: { background:"#111f18", border:"1px dashed #444", borderRadius:12, padding:16, marginBottom:16, textAlign:"center" },
-      uploadLabel: { color:"#6a9a78", fontSize:14, marginBottom:10 },
-      uploadBtn: { background:"#7bc87a", border:"none", borderRadius:8, color:"#e8f5e2", fontSize:14, fontWeight:600, padding:"8px 20px", cursor:"pointer", display:"inline-block" },
-      divider: { color:"#2d5b3f", textAlign:"center", fontSize:13, margin:"16px 0" },
-      label: { display:"block", color:"#5a8a68", fontSize:12, textTransform:"uppercase", letterSpacing:1, marginBottom:6, marginTop:14 },
-      input: { width:"100%", background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:10, color:"#e8f5e2", padding:"10px 14px", fontSize:15 },
-      textarea: { width:"100%", background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:10, color:"#e8f5e2", padding:"10px 14px", fontSize:15, resize:"vertical" },
-      submitBtn: { background:"#7bc87a", border:"none", borderRadius:12, color:"#e8f5e2", fontSize:16, fontWeight:700, padding:"14px 0", width:"100%", cursor:"pointer", marginTop:20 },
-      plannerRow: { background:"#111f18", borderRadius:12, padding:"12px 14px", marginBottom:10, display:"flex", alignItems:"center", gap:12 },
+      formHeading: { color:C.text, fontSize:22, marginBottom:16 },
+      uploadBox: { background:C.surface, border:`1px dashed ${C.border}`, borderRadius:12, padding:16, marginBottom:16, textAlign:"center" },
+      uploadLabel: { color:C.textSub, fontSize:14, marginBottom:6 },
+      uploadBtn: { background:C.accent, border:"none", borderRadius:8, color:C.bg, fontSize:14, fontWeight:600, padding:"10px 20px", cursor:"pointer", display:"inline-block", minHeight:40 },
+      divider: { color:C.textFaint, textAlign:"center", fontSize:13, margin:"16px 0" },
+      label: { display:"block", color:C.textSub, fontSize:12, textTransform:"uppercase", letterSpacing:1, marginBottom:6, marginTop:14 },
+      input: { width:"100%", background:C.surface2, border:`1px solid ${C.border}`, borderRadius:10, color:C.text, padding:"10px 14px", fontSize:15 },
+      textarea: { width:"100%", background:C.surface2, border:`1px solid ${C.border}`, borderRadius:10, color:C.text, padding:"10px 14px", fontSize:15, resize:"vertical" },
+      submitBtn: { background:C.accent, border:"none", borderRadius:12, color:C.bg, fontSize:16, fontWeight:700, padding:"14px 0", width:"100%", cursor:"pointer", marginTop:20, minHeight:48 },
+      plannerRow: { background:C.surface, borderRadius:12, padding:"12px 14px", marginBottom:10, display:"flex", alignItems:"center", gap:12 },
       plannerRecipe: { flex:1, display:"flex", alignItems:"center", gap:10 },
-      plannerRecipeName: { color:"#e8f5e2", fontSize:13, cursor:"pointer", textDecoration:"underline", flex:1 },
-      plannerRemove: { background:"none", border:"none", color:"#2d5b3f", fontSize:16, cursor:"pointer", flexShrink:0, padding:"4px 8px" },
+      plannerRecipeName: { color:C.text, fontSize:13, cursor:"pointer", textDecoration:"underline", flex:1 },
+      plannerRemove: { background:"none", border:"none", color:C.textMuted, fontSize:16, cursor:"pointer", flexShrink:0, padding:"8px", minWidth:36, minHeight:36, display:"flex", alignItems:"center", justifyContent:"center" },
       shopGroup: { marginBottom:20 },
-      shopGroupLabel: { fontSize:11, color:"#7bc87a", textTransform:"uppercase", letterSpacing:2, marginBottom:8, fontWeight:700 },
-      shopItem: { display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #162a1e", cursor:"pointer" },
-      shopCheck: { width:22, height:22, borderRadius:6, border:"2px solid #444", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:"#e8f5e2" },
-      shopCheckDone: { background:"#5cb85c", border:"2px solid #4caf50" },
-      nav: { position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:"#111f18", borderTop:"1px solid #1e3528", display:"flex", zIndex:20 },
-      navBtn: { flex:1, background:"none", border:"none", color:"#3d6b4f", padding:"10px 0 14px", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 },
-      navBtnActive: { color:"#7bc87a" },
+      shopGroupLabel: { fontSize:11, color:C.accent, textTransform:"uppercase", letterSpacing:2, marginBottom:8, fontWeight:700 },
+      shopItem: { display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:`1px solid ${C.border2}`, cursor:"pointer", minHeight:44 },
+      shopCheck: { width:24, height:24, borderRadius:6, border:`2px solid ${C.border}`, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:C.text },
+      shopCheckDone: { background:C.done, border:`2px solid ${C.done}` },
+      nav: { position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:C.surface, borderTop:`1px solid ${C.border2}`, display:"flex", zIndex:20 },
+      navBtn: { flex:1, background:"none", border:"none", color:C.textMuted, padding:"10px 0 14px", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3, minHeight:56 },
+      navBtnActive: { color:C.accent },
       navIcon: { fontSize:20 },
       navLabel: { fontSize:10, textTransform:"uppercase", letterSpacing:0.5 },
       confirmOverlay: { position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.75)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" },
-      confirmBox: { background:"#111f18", borderRadius:"20px 20px 0 0", padding:"24px 20px 40px", width:"100%", maxWidth:480 },
-      loadingScreen: { minHeight:"100vh", background:"#0d1a14", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 },
-      overlay: { position:"fixed", top:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, bottom:0, background:"#0d1a14", zIndex:50, display:"flex", flexDirection:"column" },
+      confirmBox: { background:C.surface, borderRadius:"20px 20px 0 0", padding:"24px 20px 40px", width:"100%", maxWidth:480 },
+      loadingScreen: { minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 },
+      overlay: { position:"fixed", top:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, bottom:0, background:C.bg, zIndex:50, display:"flex", flexDirection:"column" },
     };
 
     function App() {
@@ -218,54 +224,75 @@
       const [pinError, setPinError] = useState(false);
       const [appLoading, setAppLoading] = useState(false);
       const [connectionError, setConnectionError] = useState(false);
+      const [showHelp, setShowHelp] = useState(false);
       const [customShopItems, setCustomShopItems] = useState([]);
       const [newCustomItem, setNewCustomItem] = useState("");
       const [cookLog, setCookLog] = useState([]);
       const [view, setView] = useState("library");
       const [prevView, setPrevView] = useState("library");
       const [recipes, setRecipes] = useState([]);
-      const [plannerData, setPlannerData] = useState({}); // key: dateKey, val: {id, recipe_id, recipes}
+      const [plannerData, setPlannerData] = useState({});
       const [selectedRecipe, setSelectedRecipe] = useState(null);
       const [cookStep, setCookStep] = useState(0);
       const [loading, setLoading] = useState(false);
       const [shopTicks, setShopTicks] = useState({});
-      const [weekStart] = useState(getMonday());
+      const [weekStart, setWeekStart] = useState(getMonday());
       const [search, setSearch] = useState("");
       const [pickerSearch, setPickerSearch] = useState("");
       const [filterCat, setFilterCat] = useState("All");
       const [filterFav, setFilterFav] = useState(false);
       const [sortBy, setSortBy] = useState("newest");
       const [form, setForm] = useState({ title:"", category:"Dinner", source_url:"", ingredients:"", steps:"", photo_url:"", servings:2, prep_time:"", cook_time:"" });
+      const [quickAdd, setQuickAdd] = useState(false);
+      const [quickTitle, setQuickTitle] = useState("");
+      const [quickIngredients, setQuickIngredients] = useState("");
       const [formError, setFormError] = useState("");
       const [uploadError, setUploadError] = useState("");
       const [toast, setToast] = useState("");
       const [editForm, setEditForm] = useState(null);
       const [pickerDay, setPickerDay] = useState(null);
       const [confirmDelete, setConfirmDelete] = useState(false);
-      const [servingsScale, setServingsScale] = useState(1);
+      const [servingsCount, setServingsCount] = useState(null); // null = use recipe default
       const fileInputRef = useRef(null);
-      const todayKey = getTodayKey();
-      const rollingDays = getRollingDays();
+
+      // useMemo for rolling days — only recalculates when date changes
+      const todayKey = useMemo(() => getTodayKey(), []);
+      const rollingDays = useMemo(() => getRollingDays(), [todayKey]);
+
+      // Check PIN remember-me on mount
+      useEffect(() => {
+        try {
+          const saved = localStorage.getItem("pinRemember");
+          if (saved) {
+            const { expiry } = JSON.parse(saved);
+            if (Date.now() < expiry) setAuthed(true);
+          }
+          // Check if first time (show help)
+          const visited = localStorage.getItem("hasVisited");
+          if (!visited) { setShowHelp(true); localStorage.setItem("hasVisited","1"); }
+        } catch(e) {}
+      }, []);
+
+      // Update weekStart if user leaves app open across week boundary
+      useEffect(() => {
+        const interval = setInterval(() => {
+          const newMonday = getMonday();
+          setWeekStart(prev => prev !== newMonday ? newMonday : prev);
+        }, 60000); // check every minute
+        return () => clearInterval(interval);
+      }, []);
 
       useEffect(() => {
         if (authed) {
           setAppLoading(true);
           setConnectionError(false);
-          // Load custom shop items from localStorage
           try {
             const stored = localStorage.getItem("customShopItems");
             if (stored) setCustomShopItems(JSON.parse(stored));
-          } catch(e) {}
-          // Load cook log from localStorage
-          try {
             const log = localStorage.getItem("cookLog");
             if (log) setCookLog(JSON.parse(log));
           } catch(e) {}
-          // Timeout after 10 seconds
-          const timeout = setTimeout(() => {
-            setAppLoading(false);
-            setConnectionError(true);
-          }, 10000);
+          const timeout = setTimeout(() => { setAppLoading(false); setConnectionError(true); }, 10000);
           Promise.all([fetchRecipes(), fetchPlannerData(), fetchShopTicks()])
             .then(() => { clearTimeout(timeout); setConnectionError(false); })
             .finally(() => { clearTimeout(timeout); setAppLoading(false); });
@@ -275,13 +302,18 @@
       // Auto-submit PIN on 4th digit
       useEffect(() => {
         if (pin.length === 4) {
-          if (pin === CORRECT_PIN) { setAuthed(true); }
-          else { setPinError(true); setTimeout(() => { setPinError(false); setPin(""); }, 800); }
+          if (pin === CORRECT_PIN) {
+            setAuthed(true);
+            // Remember PIN for 7 days
+            try { localStorage.setItem("pinRemember", JSON.stringify({ expiry: Date.now() + PIN_REMEMBER_DAYS * 86400000 })); } catch(e) {}
+          } else {
+            setPinError(true);
+            setTimeout(() => { setPinError(false); setPin(""); }, 800);
+          }
         }
       }, [pin]);
 
       function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2500); }
-      function goTo(v) { setPrevView(view); setView(v); }
 
       async function fetchRecipes() {
         const data = await sbGet("recipes", "order=created_at.desc");
@@ -291,12 +323,9 @@
       async function fetchPlannerData() {
         const start = rollingDays[0];
         const end = rollingDays[rollingDays.length - 1];
-        // Fetch rows with a date in our rolling window
         const data = await sbGet("week_plan", `date=gte.${dateToKey(start)}&date=lte.${dateToKey(end)}&select=*,recipes(*)`);
         const plan = {};
-        (Array.isArray(data) ? data : []).forEach(row => {
-          if (row.date) plan[row.date] = row;
-        });
+        (Array.isArray(data) ? data : []).forEach(row => { if (row.date) plan[row.date] = row; });
         setPlannerData(plan);
       }
 
@@ -313,9 +342,14 @@
         if (newVal) {
           await sbUpsert("shopping_ticks", { week_start: weekStart, ingredient: ing, ticked: true }, "week_start,ingredient");
         } else {
-          // Use filter string safely
           await sbDelete("shopping_ticks", `week_start=eq.${weekStart}&ingredient=eq.${ing.replace(/&/g,'%26').replace(/=/g,'%3D')}`);
         }
+      }
+
+      async function saveRecipeQuiet(recipe, onDone) {
+        const result = await sbPost("recipes", recipe);
+        if (!result) { showToast("❌ Save failed — check connection"); return; }
+        if (onDone) onDone();
       }
 
       async function saveRecipe(recipe) {
@@ -331,7 +365,6 @@
       }
 
       async function deleteRecipe(id) {
-        // Delete from all planner entries
         await sbDelete("week_plan", `recipe_id=eq.${id}`);
         await sbDelete("recipes", `id=eq.${id}`);
         showToast("Recipe deleted");
@@ -342,12 +375,8 @@
 
       async function assignDay(dateKey, recipeId) {
         const existing = plannerData[dateKey];
-        if (existing) {
-          await sbPatch("week_plan", `id=eq.${existing.id}`, { recipe_id: recipeId });
-        } else {
-          // Use string version of getMonday to avoid UTC shift
-          await sbPost("week_plan", { date: dateKey, recipe_id: recipeId, week_start: getMonday(dateKey) });
-        }
+        if (existing) await sbPatch("week_plan", `id=eq.${existing.id}`, { recipe_id: recipeId });
+        else await sbPost("week_plan", { date: dateKey, recipe_id: recipeId, week_start: getMonday(dateKey) });
         await fetchPlannerData();
         showToast("Added to plan!");
       }
@@ -378,13 +407,13 @@
 
       function logCook(recipeId, recipeTitle) {
         const entry = { recipeId, recipeTitle, date: new Date().toISOString().split("T")[0] };
-        const updated = [entry, ...cookLog].slice(0, 50); // keep last 50
+        const updated = [entry, ...cookLog].slice(0, 50);
         setCookLog(updated);
         try { localStorage.setItem("cookLog", JSON.stringify(updated)); } catch(e) {}
-        showToast("Logged as cooked tonight! 🍳");
+        showToast("Logged as cooked! 🍳");
       }
 
-      function addCustomShopItem() {
+      function addCustomShopItemFn() {
         const val = newCustomItem.trim();
         if (!val) return;
         const updated = [...customShopItems, val];
@@ -393,7 +422,7 @@
         try { localStorage.setItem("customShopItems", JSON.stringify(updated)); } catch(e) {}
       }
 
-      function removeCustomShopItem(idx) {
+      function removeCustomShopItemFn(idx) {
         const updated = customShopItems.filter((_, i) => i !== idx);
         setCustomShopItems(updated);
         try { localStorage.setItem("customShopItems", JSON.stringify(updated)); } catch(e) {}
@@ -407,34 +436,56 @@
           ingredients: form.ingredients.split("\n").filter(l=>l.trim()),
           steps: form.steps.split("\n").filter(l=>l.trim()),
           servings: parseInt(form.servings)||2,
-          prep_time: form.prep_time.trim()||null,
-          cook_time: form.cook_time.trim()||null,
+          prep_time: form.prep_time.trim()||null, cook_time: form.cook_time.trim()||null,
           is_favourite: false, rating: 0, notes: null,
         });
         setFormError("");
       }
 
+      function handleQuickAdd() {
+        if (!quickTitle.trim()) return;
+        saveRecipe({
+          title: quickTitle.trim(), category: "Dinner",
+          source_url: null, photo_url: null,
+          ingredients: quickIngredients.split("\n").filter(l=>l.trim()),
+          steps: [],
+          servings: 2, prep_time: null, cook_time: null,
+          is_favourite: false, rating: 0, notes: null,
+        });
+        setQuickTitle(""); setQuickIngredients(""); setQuickAdd(false);
+      }
+
       function handleJsonUpload(e) {
-        const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          try {
-            const data = JSON.parse(ev.target.result);
-            if (!data.title) { setUploadError("Invalid file — missing title."); return; }
-            saveRecipe({
-              title:data.title, category:data.category||"Dinner",
-              source_url:data.source_url||null, photo_url:data.photo_url||null,
-              ingredients:Array.isArray(data.ingredients)?data.ingredients:[],
-              steps:Array.isArray(data.steps)?data.steps:[],
-              servings:data.servings||2,
-              prep_time:data.prep_time||null, cook_time:data.cook_time||null,
-              is_favourite:false, rating:0, notes:null,
-            });
-            setUploadError("");
-          } catch { setUploadError("Could not parse file."); }
-        };
-        reader.readAsText(file);
-        // Reset input so same file can be re-uploaded
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        setUploadError("");
+        let errorCount = 0, successCount = 0;
+        const total = files.length;
+        files.forEach(file => {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              const data = JSON.parse(ev.target.result);
+              if (!data.title) { errorCount++; if (errorCount+successCount===total) setUploadError(`${errorCount} file(s) failed — missing title.`); return; }
+              saveRecipeQuiet({
+                title:data.title, category:data.category||"Dinner",
+                source_url:data.source_url||null, photo_url:data.photo_url||null,
+                ingredients:Array.isArray(data.ingredients)?data.ingredients:[],
+                steps:Array.isArray(data.steps)?data.steps:[],
+                servings:data.servings||2, prep_time:data.prep_time||null, cook_time:data.cook_time||null,
+                is_favourite:false, rating:0, notes:null,
+              }, () => {
+                successCount++;
+                if (successCount+errorCount===total) {
+                  fetchRecipes(); setView("library");
+                  showToast(`${successCount} recipe${successCount>1?"s":""} saved!`);
+                  if (errorCount > 0) setUploadError(`${errorCount} file(s) failed.`);
+                }
+              });
+            } catch { errorCount++; if (errorCount+successCount===total) setUploadError(`${errorCount} file(s) could not be parsed.`); }
+          };
+          reader.readAsText(file);
+        });
         e.target.value = "";
       }
 
@@ -450,7 +501,6 @@
         const arr = [...list];
         if (sortBy === "az") return arr.sort((a,b) => a.title.localeCompare(b.title));
         if (sortBy === "rating") return arr.sort((a,b) => (b.rating||0) - (a.rating||0));
-        if (sortBy === "newest") return arr; // already sorted by created_at desc
         return arr;
       }
 
@@ -461,16 +511,12 @@
         return matchSearch && matchCat && matchFav;
       }));
 
-      // Tonight's dinner
-      const tonightEntry = plannerData[todayKey];
-      const tonightRecipe = tonightEntry?.recipes;
+      const tonightRecipe = plannerData[todayKey]?.recipes;
 
-      // Build grouped shopping list from all planned days in rolling window (today + future)
       function buildShopGroups() {
         const seen = {};
         Object.entries(plannerData).forEach(([dateKey, row]) => {
           if (!row?.recipes) return;
-          // Only include today and future days
           if (dateKey < todayKey) return;
           (row.recipes.ingredients || []).forEach(ing => {
             const key = ing.trim().toLowerCase();
@@ -486,44 +532,77 @@
         return groups;
       }
 
-      // Get planned date keys for a recipe
       function getPlannedDates(recipeId) {
         return Object.entries(plannerData)
-          .filter(([k, v]) => v?.recipe_id === recipeId)
+          .filter(([k,v]) => v?.recipe_id === recipeId)
           .map(([k]) => k);
       }
 
-      // ─── PIN SCREEN ───────────────────────────────────────────────────────
+      // Servings: use per-recipe count, integer only
+      const baseServings = selectedRecipe?.servings || 2;
+      const currentServings = servingsCount !== null ? servingsCount : baseServings;
+      const servingsScale = currentServings / baseServings;
+
+      // ── HELP SCREEN ────────────────────────────────────────────────────────
+      if (showHelp) return (
+        <div style={{ ...s.screen, display:"flex", flexDirection:"column", padding:24 }}>
+          <div style={{ fontSize:48, textAlign:"center", marginBottom:16 }}>👋</div>
+          <h1 style={{ color:C.text, fontSize:24, textAlign:"center", marginBottom:8 }}>Welcome to Our Recipes</h1>
+          <p style={{ color:C.textSub, fontSize:14, textAlign:"center", lineHeight:1.7, marginBottom:32 }}>A shared recipe app for both of you.</p>
+          {[
+            { icon:"📚", title:"Recipe Library", desc:"Browse, search, filter and rate your saved recipes." },
+            { icon:"📅", title:"Meal Planner", desc:"Plan dinners up to a week ahead on a rolling calendar." },
+            { icon:"🛒", title:"Shopping List", desc:"Auto-generated from your plan, grouped by category. Synced for both of you." },
+            { icon:"🍳", title:"Cook Mode", desc:"Step-by-step instructions while you cook. Scale servings up or down." },
+            { icon:"📎", title:"Add Recipes", desc:"Upload JSON files from Claude, or fill in manually. You can also quick-add just a title and ingredients." },
+          ].map((item, i) => (
+            <div key={i} style={{ display:"flex", gap:14, marginBottom:20, background:C.surface, borderRadius:12, padding:"14px 16px" }}>
+              <div style={{ fontSize:28, flexShrink:0 }}>{item.icon}</div>
+              <div>
+                <div style={{ color:C.text, fontWeight:700, marginBottom:4 }}>{item.title}</div>
+                <div style={{ color:C.textSub, fontSize:13, lineHeight:1.5 }}>{item.desc}</div>
+              </div>
+            </div>
+          ))}
+          <button style={{ ...s.submitBtn, marginTop:8 }} onClick={() => setShowHelp(false)}>Let's cook! →</button>
+        </div>
+      );
+
+      // ── PIN SCREEN ─────────────────────────────────────────────────────────
       if (!authed) return (
         <div style={s.pinScreen}>
           <div style={s.pinCard}>
             <div style={{ marginBottom:16 }}>
-              <svg width="80" height="40" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
-                <ellipse cx="60" cy="35" rx="38" ry="28" fill="none" stroke="#e8f5e2" strokeWidth="5"/>
-                <ellipse cx="140" cy="35" rx="38" ry="28" fill="none" stroke="#e8f5e2" strokeWidth="5"/>
-                <rect x="98" y="30" width="4" height="10" fill="#e8f5e2"/>
-                <line x1="22" y1="35" x2="0" y2="28" stroke="#e8f5e2" strokeWidth="4" strokeLinecap="round"/>
-                <line x1="178" y1="35" x2="200" y2="28" stroke="#e8f5e2" strokeWidth="4" strokeLinecap="round"/>
-                <rect x="32" y="20" width="6" height="20" fill="#5cb85c" rx="1"/>
-                <rect x="42" y="26" width="6" height="14" fill="#7bc87a" rx="1"/>
-                <rect x="52" y="15" width="6" height="25" fill="#5cb85c" rx="1"/>
-                <polyline points="110,45 120,28 130,35 150,20 160,30" stroke="#7bc87a" strokeWidth="3" fill="none" strokeLinecap="round"/>
-                <circle cx="160" cy="30" r="3" fill="#7bc87a"/>
+              <svg width="80" height="40" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg" aria-label="DataIsCool logo">
+                <ellipse cx="60" cy="35" rx="38" ry="28" fill="none" stroke={C.text} strokeWidth="5"/>
+                <ellipse cx="140" cy="35" rx="38" ry="28" fill="none" stroke={C.text} strokeWidth="5"/>
+                <rect x="98" y="30" width="4" height="10" fill={C.text}/>
+                <line x1="22" y1="35" x2="0" y2="28" stroke={C.text} strokeWidth="4" strokeLinecap="round"/>
+                <line x1="178" y1="35" x2="200" y2="28" stroke={C.text} strokeWidth="4" strokeLinecap="round"/>
+                <rect x="32" y="20" width="6" height="20" fill={C.done} rx="1"/>
+                <rect x="42" y="26" width="6" height="14" fill={C.accent} rx="1"/>
+                <rect x="52" y="15" width="6" height="25" fill={C.done} rx="1"/>
+                <polyline points="110,45 120,28 130,35 150,20 160,30" stroke={C.accent} strokeWidth="3" fill="none" strokeLinecap="round"/>
+                <circle cx="160" cy="30" r="3" fill={C.accent}/>
               </svg>
             </div>
             <h1 style={s.pinTitle}>Our Recipes</h1>
-            <p style={{ ...s.pinSub, fontSize:11, color:"#3d6b4f", letterSpacing:2, textTransform:"uppercase", marginBottom:4 }}>by DataIsCool</p>
+            <p style={{ ...s.pinSub, fontSize:11, color:C.textFaint, letterSpacing:2, textTransform:"uppercase", marginBottom:4 }}>by DataIsCool</p>
             <p style={s.pinSub}>Enter PIN to continue</p>
             <div style={{ display:"flex", gap:8, justifyContent:"center", margin:"20px 0" }}>
-              {[0,1,2,3].map(i => <div key={i} style={{ ...s.pinDot, background: pin.length > i ? "#7bc87a" : "#1e3528" }} />)}
+              {[0,1,2,3].map(i => <div key={i} style={{ ...s.pinDot, background: pin.length > i ? C.accent : C.surface3 }} />)}
             </div>
-            <div style={s.pinGrid}>
+            <div style={s.pinGrid} role="group" aria-label="PIN keypad">
               {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i) => (
-                <button key={i} style={{ ...s.pinBtn, ...(k===""?{opacity:0,pointerEvents:"none"}:{}), ...(pinError?{background:"#1a2e22"}:{}) }}
-                  onClick={() => { if(k==="⌫") setPin(p=>p.slice(0,-1)); else if(k!==""&&pin.length<4) setPin(p=>p+k); }}>{k}</button>
+                <button key={i}
+                  aria-label={k === "⌫" ? "Delete" : k === "" ? "" : `${k}`}
+                  style={{ ...s.pinBtn, ...(k===""?{opacity:0,pointerEvents:"none"}:{}), ...(pinError?{background:"#2a1414"}:{}) }}
+                  onClick={() => { if(k==="⌫") setPin(p=>p.slice(0,-1)); else if(k!==""&&pin.length<4) setPin(p=>p+k); }}>
+                  {k}
+                </button>
               ))}
             </div>
-            {pinError && <p style={{ color:"#7bc87a", textAlign:"center", marginTop:8 }}>Wrong PIN</p>}
+            {pinError && <p role="alert" style={{ color:C.danger, textAlign:"center", marginTop:8 }}>Wrong PIN</p>}
           </div>
         </div>
       );
@@ -531,39 +610,57 @@
       if (connectionError) return (
         <div style={s.loadingScreen}>
           <div style={{ fontSize:48 }}>📡</div>
-          <div style={{ color:"#e8f5e2", fontSize:17, fontWeight:700, marginBottom:8 }}>Couldn't connect</div>
-          <div style={{ color:"#5a8a68", fontSize:14, textAlign:"center", maxWidth:260, lineHeight:1.6 }}>Check your internet connection and try again.</div>
+          <div style={{ color:C.text, fontSize:17, fontWeight:700, marginBottom:8 }}>Couldn't connect</div>
+          <div style={{ color:C.textSub, fontSize:14, textAlign:"center", maxWidth:260, lineHeight:1.6 }}>Check your internet connection and try again.</div>
           <button style={{ ...s.submitBtn, marginTop:24, maxWidth:200, padding:"12px 0" }}
-            onClick={() => { setConnectionError(false); setAuthed(false); setPin(""); }}>Try again</button>
+            onClick={() => { setConnectionError(false); setAuthed(false); setPin(""); try{localStorage.removeItem("pinRemember");}catch(e){} }}>
+            Try again
+          </button>
         </div>
       );
 
       if (appLoading) return (
         <div style={s.loadingScreen}>
           <div style={{ fontSize:48 }}>🍽️</div>
-          <div style={{ color:"#5a8a68", fontSize:14 }}>Loading your recipes...</div>
+          <div style={{ color:C.textSub, fontSize:14 }}>Loading your recipes...</div>
         </div>
       );
 
-      // ─── COOK MODE ────────────────────────────────────────────────────────
+      // ── COOK MODE ──────────────────────────────────────────────────────────
       if (view === "cook" && selectedRecipe) {
         const steps = selectedRecipe.steps || [];
-        const isDone = cookStep >= steps.length - 1;
+        const total = steps.length;
+        const isDone = total === 0 || cookStep >= total - 1;
+        const progress = total === 0 ? 100 : Math.round(((cookStep + 1) / total) * 100);
         return (
           <div style={s.cookScreen}>
             <div style={s.cookHeader}>
-              <button style={s.backBtn} onClick={() => { setView("detail"); setCookStep(0); }}>← Back</button>
+              <button style={{ ...s.backBtn, color:C.textSub }} aria-label="Back to recipe" onClick={() => { setView("detail"); setCookStep(0); }}>← Back</button>
               <span style={s.cookTitle}>{selectedRecipe.title}</span>
             </div>
+            {/* Progress bar */}
+            <div style={{ height:3, background:C.surface3 }}>
+              <div style={{ height:3, background:C.accent, width:`${progress}%`, transition:"width 0.3s" }} />
+            </div>
             <div style={s.cookBody}>
-              <div style={s.cookStepNum}>Step {cookStep+1} of {steps.length}</div>
-              <div style={s.cookStepText}>{steps[cookStep]}</div>
-              <div style={s.cookNav}>
-                <button style={{ ...s.cookNavBtn, opacity:cookStep===0?0.3:1 }} disabled={cookStep===0} onClick={() => setCookStep(c=>c-1)}>← Prev</button>
-                {!isDone
-                  ? <button style={s.cookNavBtn} onClick={() => setCookStep(c=>c+1)}>Next →</button>
-                  : <button style={{ ...s.cookNavBtn, background:"#5cb85c" }} onClick={() => { setView("detail"); setCookStep(0); }}>Done ✓</button>}
-              </div>
+              {total === 0 ? (
+                <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
+                  <div style={{ fontSize:40 }}>🍽️</div>
+                  <div style={{ color:C.textSub, fontSize:16 }}>No steps added yet.</div>
+                  <button style={{ ...s.cookNavBtn, flex:"none", padding:"12px 24px" }} onClick={() => { setView("detail"); setCookStep(0); }}>Back to recipe</button>
+                </div>
+              ) : (
+                <>
+                  <div style={s.cookStepNum}>Step {cookStep+1} of {total}</div>
+                  <div style={s.cookStepText}>{steps[cookStep]}</div>
+                  <div style={s.cookNav}>
+                    <button aria-label="Previous step" style={{ ...s.cookNavBtn, opacity:cookStep===0?0.3:1 }} disabled={cookStep===0} onClick={() => setCookStep(c=>c-1)}>← Prev</button>
+                    {!isDone
+                      ? <button aria-label="Next step" style={s.cookNavBtn} onClick={() => setCookStep(c=>c+1)}>Next →</button>
+                      : <button aria-label="Finish cooking" style={{ ...s.cookNavBtn, background:C.done, border:"none", color:"#fff" }} onClick={() => { setView("detail"); setCookStep(0); }}>Done ✓</button>}
+                  </div>
+                </>
+              )}
               <div style={s.cookIngBox}>
                 <div style={s.cookIngTitle}>Ingredients</div>
                 {(selectedRecipe.ingredients||[]).map((ing,i) => <div key={i} style={s.cookIng}>• {ing}</div>)}
@@ -573,93 +670,109 @@
         );
       }
 
-      // ─── RECIPE DETAIL ────────────────────────────────────────────────────
+      // ── RECIPE DETAIL ──────────────────────────────────────────────────────
       if (view === "detail" && selectedRecipe) {
-        const baseServings = selectedRecipe.servings || 2;
-        const scaledServings = Math.max(1, baseServings * servingsScale);
         const plannedDates = getPlannedDates(selectedRecipe.id);
         return (
           <div style={s.screen}>
             {confirmDelete && (
-              <div style={s.confirmOverlay}>
+              <div style={s.confirmOverlay} role="dialog" aria-modal="true" aria-label="Confirm delete">
                 <div style={s.confirmBox}>
-                  <div style={{ color:"#e8f5e2", fontSize:17, fontWeight:700, marginBottom:8 }}>Delete "{selectedRecipe.title}"?</div>
-                  <div style={{ color:"#5a8a68", fontSize:14, marginBottom:20 }}>This cannot be undone and will remove it from your plan.</div>
-                  <button style={{ ...s.submitBtn, marginTop:0 }} onClick={() => deleteRecipe(selectedRecipe.id)}>Yes, delete</button>
-                  <button style={{ ...s.submitBtn, marginTop:10, background:"#1e3528" }} onClick={() => setConfirmDelete(false)}>Cancel</button>
+                  <div style={{ color:C.text, fontSize:17, fontWeight:700, marginBottom:8 }}>Delete "{selectedRecipe.title}"?</div>
+                  <div style={{ color:C.textSub, fontSize:14, marginBottom:20 }}>This cannot be undone and will remove it from your plan.</div>
+                  <button style={{ ...s.submitBtn, marginTop:0, background:C.danger }} onClick={() => deleteRecipe(selectedRecipe.id)}>Yes, delete</button>
+                  <button style={{ ...s.submitBtn, marginTop:10, background:C.surface3 }} onClick={() => setConfirmDelete(false)}>Cancel</button>
                 </div>
               </div>
             )}
             <div style={s.detailHeader}>
-              <button style={s.backBtn} onClick={() => { setView(prevView==="planner"?"planner":"library"); setEditForm(null); setServingsScale(1); }}>← Back</button>
-              <div style={{ display:"flex", gap:16, alignItems:"center" }}>
-                <button style={{ background:"none", border:"none", fontSize:24, cursor:"pointer", color: selectedRecipe.is_favourite?"#7bc87a":"#555", lineHeight:1 }} onClick={() => toggleFavourite(selectedRecipe)}>
+              <button aria-label="Go back" style={s.backBtn} onClick={() => { setView(prevView==="planner"?"planner":"library"); setEditForm(null); setServingsCount(null); }}>← Back</button>
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <button aria-label={selectedRecipe.is_favourite?"Remove from favourites":"Add to favourites"}
+                  style={{ background:"none", border:"none", fontSize:24, cursor:"pointer", color: selectedRecipe.is_favourite?C.accent:C.textSub, lineHeight:1, padding:"8px", minWidth:44, minHeight:44, display:"flex", alignItems:"center", justifyContent:"center" }}
+                  onClick={() => toggleFavourite(selectedRecipe)}>
                   {selectedRecipe.is_favourite ? "♥" : "♡"}
                 </button>
-                <button style={{ ...s.backBtn, color:"#6a9a78", fontSize:14 }} onClick={() => setEditForm(editForm ? null : {
-                  title: selectedRecipe.title, category: selectedRecipe.category||"Dinner",
-                  source_url: selectedRecipe.source_url||"", photo_url: selectedRecipe.photo_url||"",
-                  ingredients: (selectedRecipe.ingredients||[]).join("\n"),
-                  steps: (selectedRecipe.steps||[]).join("\n"),
-                  servings: selectedRecipe.servings||2,
-                  prep_time: selectedRecipe.prep_time||"", cook_time: selectedRecipe.cook_time||"",
-                  notes: selectedRecipe.notes||"", rating: selectedRecipe.rating||0,
-                })}>{editForm ? "Cancel" : "✏️ Edit"}</button>
-                <button style={{ ...s.backBtn, color:"#7bc87a", fontSize:14 }} onClick={() => setConfirmDelete(true)}>Delete</button>
+                <button aria-label={editForm?"Cancel editing":"Edit recipe"}
+                  style={{ ...s.backBtn, fontSize:14 }}
+                  onClick={() => setEditForm(editForm ? null : {
+                    title:selectedRecipe.title, category:selectedRecipe.category||"Dinner",
+                    source_url:selectedRecipe.source_url||"", photo_url:selectedRecipe.photo_url||"",
+                    ingredients:(selectedRecipe.ingredients||[]).join("\n"),
+                    steps:(selectedRecipe.steps||[]).join("\n"),
+                    servings:selectedRecipe.servings||2,
+                    prep_time:selectedRecipe.prep_time||"", cook_time:selectedRecipe.cook_time||"",
+                    notes:selectedRecipe.notes||"", rating:selectedRecipe.rating||0,
+                  })}>
+                  {editForm ? "Cancel" : "✏️ Edit"}
+                </button>
+                <button aria-label="Delete recipe" style={{ ...s.backBtn, color:C.danger, fontSize:14 }} onClick={() => setConfirmDelete(true)}>Delete</button>
               </div>
             </div>
 
             {editForm ? (
               <div style={{ padding:"0 16px 80px" }}>
                 <h2 style={{ ...s.formHeading, marginTop:8 }}>Edit Recipe</h2>
-                <label style={s.label}>Title</label>
-                <input style={s.input} value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
-                <label style={s.label}>Category</label>
-                <select style={s.input} value={editForm.category} onChange={e => setEditForm(f=>({...f,category:e.target.value}))}>
+                <label style={s.label} htmlFor="edit-title">Title</label>
+                <input id="edit-title" style={s.input} value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
+                <label style={s.label} htmlFor="edit-cat">Category</label>
+                <select id="edit-cat" style={s.input} value={editForm.category} onChange={e => setEditForm(f=>({...f,category:e.target.value}))}>
                   {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                  <div>
-                    <label style={s.label}>Prep time</label>
-                    <input style={s.input} value={editForm.prep_time} onChange={e => setEditForm(f=>({...f,prep_time:e.target.value}))} placeholder="e.g. 10 min" />
-                  </div>
-                  <div>
-                    <label style={s.label}>Cook time</label>
-                    <input style={s.input} value={editForm.cook_time} onChange={e => setEditForm(f=>({...f,cook_time:e.target.value}))} placeholder="e.g. 30 min" />
-                  </div>
+                  <div><label style={s.label} htmlFor="edit-prep">Prep time</label><input id="edit-prep" style={s.input} value={editForm.prep_time} onChange={e => setEditForm(f=>({...f,prep_time:e.target.value}))} placeholder="10 min" /></div>
+                  <div><label style={s.label} htmlFor="edit-cook">Cook time</label><input id="edit-cook" style={s.input} value={editForm.cook_time} onChange={e => setEditForm(f=>({...f,cook_time:e.target.value}))} placeholder="30 min" /></div>
                 </div>
-                <label style={s.label}>Servings</label>
-                <input style={s.input} type="number" min="1" value={editForm.servings} onChange={e => setEditForm(f=>({...f,servings:e.target.value}))} />
-                <label style={s.label}>Photo URL</label>
-                <input style={s.input} value={editForm.photo_url} onChange={e => setEditForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
-                <label style={s.label}>Source URL</label>
-                <input style={s.input} value={editForm.source_url} onChange={e => setEditForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
-                <label style={s.label}>Your Notes</label>
-                <textarea style={s.textarea} rows={3} value={editForm.notes} onChange={e => setEditForm(f=>({...f,notes:e.target.value}))} placeholder="e.g. Add more garlic next time!" />
+                <label style={s.label} htmlFor="edit-servings">Servings</label>
+                <input id="edit-servings" style={s.input} type="number" min="1" value={editForm.servings} onChange={e => setEditForm(f=>({...f,servings:e.target.value}))} />
+                <label style={s.label} htmlFor="edit-photo">Photo URL</label>
+                <input id="edit-photo" style={s.input} value={editForm.photo_url} onChange={e => setEditForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
+                <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                  <label style={{ flex:1, background:C.surface2, border:`1px solid ${C.border}`, borderRadius:8, color:C.textSub, fontSize:12, padding:"10px 12px", cursor:"pointer", textAlign:"center", minHeight:40, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    📷 Upload photo
+                    <input type="file" accept="image/*" style={{ display:"none" }} onChange={async (e) => {
+                      const file = e.target.files[0]; if (!file) return;
+                      showToast("Uploading...");
+                      const formData = new FormData();
+                      formData.append("image", file);
+                      try {
+                        const res = await fetch("https://api.imgbb.com/1/upload?key=YOUR_IMGBB_KEY", { method:"POST", body:formData });
+                        const data = await res.json();
+                        if (data?.data?.url) { setEditForm(f=>({...f,photo_url:data.data.url})); showToast("Photo uploaded!"); }
+                        else showToast("Upload failed — try a URL instead");
+                      } catch { showToast("Upload failed — try a URL instead"); }
+                      e.target.value = "";
+                    }} />
+                  </label>
+                </div>
+                <label style={s.label} htmlFor="edit-source">Source URL</label>
+                <input id="edit-source" style={s.input} value={editForm.source_url} onChange={e => setEditForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
+                <label style={s.label} htmlFor="edit-notes">Your Notes</label>
+                <textarea id="edit-notes" style={s.textarea} rows={3} value={editForm.notes} onChange={e => setEditForm(f=>({...f,notes:e.target.value}))} placeholder="e.g. Add more garlic next time!" />
                 <label style={s.label}>Rating</label>
-                <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                <div style={{ display:"flex", gap:6, marginTop:6 }} role="group" aria-label="Recipe rating">
                   {[1,2,3,4,5].map(n => (
-                    <button key={n} onClick={() => setEditForm(f=>({...f,rating:n}))}
-                      style={{ background:"none", border:"none", fontSize:28, cursor:"pointer", color: n <= editForm.rating ? "#7bc87a" : "#333", padding:0 }}>★</button>
+                    <button key={n} aria-label={`${n} star${n>1?"s":""}`} onClick={() => setEditForm(f=>({...f,rating:n}))}
+                      style={{ background:"none", border:"none", fontSize:28, cursor:"pointer", color: n<=editForm.rating?C.accent:C.surface3, padding:0, minWidth:36, minHeight:36 }}>★</button>
                   ))}
                 </div>
-                <label style={s.label}>Ingredients (one per line)</label>
-                <textarea style={s.textarea} rows={6} value={editForm.ingredients} onChange={e => setEditForm(f=>({...f,ingredients:e.target.value}))} />
-                <label style={s.label}>Steps (one per line)</label>
-                <textarea style={s.textarea} rows={6} value={editForm.steps} onChange={e => setEditForm(f=>({...f,steps:e.target.value}))} />
+                <label style={s.label} htmlFor="edit-ings">Ingredients (one per line)</label>
+                <textarea id="edit-ings" style={s.textarea} rows={6} value={editForm.ingredients} onChange={e => setEditForm(f=>({...f,ingredients:e.target.value}))} />
+                <label style={s.label} htmlFor="edit-steps">Steps (one per line)</label>
+                <textarea id="edit-steps" style={s.textarea} rows={6} value={editForm.steps} onChange={e => setEditForm(f=>({...f,steps:e.target.value}))} />
                 <button style={s.submitBtn} disabled={loading} onClick={() => updateRecipe(selectedRecipe.id, {
-                  title: editForm.title.trim(), category: editForm.category,
-                  source_url: editForm.source_url.trim()||null, photo_url: editForm.photo_url.trim()||null,
-                  ingredients: editForm.ingredients.split("\n").filter(l=>l.trim()),
-                  steps: editForm.steps.split("\n").filter(l=>l.trim()),
-                  servings: parseInt(editForm.servings)||2,
-                  prep_time: editForm.prep_time.trim()||null, cook_time: editForm.cook_time.trim()||null,
-                  notes: editForm.notes.trim()||null, rating: editForm.rating||0,
+                  title:editForm.title.trim(), category:editForm.category,
+                  source_url:editForm.source_url.trim()||null, photo_url:editForm.photo_url.trim()||null,
+                  ingredients:editForm.ingredients.split("\n").filter(l=>l.trim()),
+                  steps:editForm.steps.split("\n").filter(l=>l.trim()),
+                  servings:parseInt(editForm.servings)||2,
+                  prep_time:editForm.prep_time.trim()||null, cook_time:editForm.cook_time.trim()||null,
+                  notes:editForm.notes.trim()||null, rating:editForm.rating||0,
                 })}>{loading?"Saving...":"Save Changes"}</button>
               </div>
             ) : (
               <>
-                {selectedRecipe.photo_url && <img src={selectedRecipe.photo_url} alt="" style={s.detailPhoto} />}
+                {selectedRecipe.photo_url && <img src={selectedRecipe.photo_url} alt={selectedRecipe.title} style={s.detailPhoto} loading="lazy" />}
                 <div style={s.detailBody}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                     <div style={{ flex:1 }}>
@@ -667,59 +780,59 @@
                       <h2 style={s.detailTitle}>{selectedRecipe.title}</h2>
                     </div>
                     {selectedRecipe.rating > 0 && (
-                      <div style={{ color:"#7bc87a", fontSize:16, marginTop:8, flexShrink:0 }}>{"★".repeat(selectedRecipe.rating)}{"☆".repeat(5-selectedRecipe.rating)}</div>
+                      <div aria-label={`${selectedRecipe.rating} out of 5 stars`} style={{ color:C.accent, fontSize:16, marginTop:8, flexShrink:0 }}>
+                        {"★".repeat(selectedRecipe.rating)}{"☆".repeat(5-selectedRecipe.rating)}
+                      </div>
                     )}
                   </div>
-
-                  {/* Time + servings info bar */}
-                  {(selectedRecipe.prep_time || selectedRecipe.cook_time) && (
+                  {(selectedRecipe.prep_time||selectedRecipe.cook_time) && (
                     <div style={{ display:"flex", gap:16, marginBottom:12 }}>
-                      {selectedRecipe.prep_time && <span style={{ color:"#5a8a68", fontSize:13 }}>⏱ Prep: {selectedRecipe.prep_time}</span>}
-                      {selectedRecipe.cook_time && <span style={{ color:"#5a8a68", fontSize:13 }}>🍳 Cook: {selectedRecipe.cook_time}</span>}
+                      {selectedRecipe.prep_time && <span style={{ color:C.textSub, fontSize:13 }}>⏱ Prep: {selectedRecipe.prep_time}</span>}
+                      {selectedRecipe.cook_time && <span style={{ color:C.textSub, fontSize:13 }}>🍳 Cook: {selectedRecipe.cook_time}</span>}
                     </div>
                   )}
+                  {selectedRecipe.notes && <div style={{ color:C.textSub, fontSize:13, fontStyle:"italic", marginBottom:12, background:C.surface, borderRadius:8, padding:"8px 12px" }}>💬 {selectedRecipe.notes}</div>}
+                  {selectedRecipe.source_url && <a href={selectedRecipe.source_url} target="_blank" rel="noopener noreferrer" style={s.detailLink}>View original source ↗</a>}
 
-                  {selectedRecipe.notes && <div style={{ color:"#6a9a78", fontSize:13, fontStyle:"italic", marginBottom:12, background:"#111f18", borderRadius:8, padding:"8px 12px" }}>💬 {selectedRecipe.notes}</div>}
-                  {selectedRecipe.source_url && <a href={selectedRecipe.source_url} target="_blank" style={s.detailLink}>View original source ↗</a>}
-
-                  {/* Servings scaler */}
-                  <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:4, marginBottom:4, background:"#111f18", borderRadius:10, padding:"10px 14px" }}>
-                    <span style={{ color:"#5a8a68", fontSize:13, flex:1 }}>Servings</span>
-                    <button onClick={() => setServingsScale(s => Math.max(s - 0.5, 0.5))} style={{ background:"#1e3528", border:"none", color:"#e8f5e2", borderRadius:6, width:30, height:30, cursor:"pointer", fontSize:18, lineHeight:1 }}>−</button>
-                    <span style={{ color:"#e8f5e2", fontSize:16, fontWeight:700, minWidth:30, textAlign:"center" }}>{scaledServings}</span>
-                    <button onClick={() => setServingsScale(s => s + 0.5)} style={{ background:"#1e3528", border:"none", color:"#e8f5e2", borderRadius:6, width:30, height:30, cursor:"pointer", fontSize:18, lineHeight:1 }}>+</button>
-                    {servingsScale !== 1 && <span style={{ color:"#2d5b3f", fontSize:11 }}>base {baseServings}</span>}
+                  {/* Servings scaler — integer only */}
+                  <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:4, marginBottom:4, background:C.surface, borderRadius:10, padding:"10px 14px" }}>
+                    <span style={{ color:C.textSub, fontSize:13, flex:1 }}>Servings</span>
+                    <button aria-label="Decrease servings" onClick={() => setServingsCount(s => Math.max(1, (s !== null ? s : baseServings) - 1))}
+                      style={{ background:C.surface2, border:"none", color:C.text, borderRadius:6, width:34, height:34, cursor:"pointer", fontSize:18, lineHeight:1 }}>−</button>
+                    <span style={{ color:C.text, fontSize:16, fontWeight:700, minWidth:30, textAlign:"center" }}>{currentServings}</span>
+                    <button aria-label="Increase servings" onClick={() => setServingsCount(s => (s !== null ? s : baseServings) + 1)}
+                      style={{ background:C.surface2, border:"none", color:C.text, borderRadius:6, width:34, height:34, cursor:"pointer", fontSize:18, lineHeight:1 }}>+</button>
+                    {servingsCount !== null && <button onClick={() => setServingsCount(null)} style={{ background:"none", border:"none", color:C.textMuted, fontSize:12, cursor:"pointer" }}>Reset</button>}
                   </div>
 
                   <div style={s.sectionLabel}>Ingredients</div>
                   {(selectedRecipe.ingredients||[]).map((ing,i) => (
                     <div key={i} style={s.listItem}>• {scaleIngredient(ing, servingsScale)}</div>
                   ))}
-
                   <div style={s.sectionLabel}>Steps</div>
-                  {(selectedRecipe.steps||[]).map((step,i) => (
-                    <div key={i} style={s.listItem}><span style={s.stepNum}>{i+1}</span> {step}</div>
-                  ))}
+                  {(selectedRecipe.steps||[]).length === 0
+                    ? <div style={{ color:C.textSub, fontSize:14, fontStyle:"italic" }}>No steps added yet — tap Edit to add them.</div>
+                    : (selectedRecipe.steps||[]).map((step,i) => <div key={i} style={s.listItem}><span style={s.stepNum}>{i+1}</span> {step}</div>)}
 
                   <div style={s.sectionLabel}>Add to plan</div>
-                  <div style={{ color:"#3d6b4f", fontSize:12, marginBottom:10 }}>Tap a date to plan this recipe</div>
+                  <div style={{ color:C.textMuted, fontSize:12, marginBottom:10 }}>Tap a date to plan this recipe</div>
                   <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:8, marginBottom:16 }}>
                     {rollingDays.map(d => {
                       const dk = dateToKey(d);
                       const isToday = dk === todayKey;
                       const isPlanned = plannerData[dk]?.recipe_id === selectedRecipe.id;
                       return (
-                        <div key={dk} onClick={() => assignDay(dk, selectedRecipe.id)}
-                          style={{ flexShrink:0, textAlign:"center", cursor:"pointer", padding:"8px 10px", borderRadius:10,
-                            background: isPlanned ? "#7bc87a" : isToday ? "#2a2a2a" : "#1a1a1a",
-                            border: isToday ? "1px solid #e07b4a" : "1px solid #2a2a2a" }}>
-                          <div style={{ fontSize:10, color: isPlanned?"#fff":"#888" }}>{DAY_NAMES[d.getDay()].slice(0,3)}</div>
-                          <div style={{ fontSize:14, fontWeight:700, color: isPlanned?"#fff": isToday?"#7bc87a":"#ccc" }}>{d.getDate()}</div>
+                        <div key={dk} role="button" aria-label={`${isPlanned?"Remove from":"Plan for"} ${DAY_NAMES[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`}
+                          onClick={() => assignDay(dk, selectedRecipe.id)}
+                          style={{ flexShrink:0, textAlign:"center", cursor:"pointer", padding:"8px 10px", borderRadius:10, minWidth:44, minHeight:44,
+                            background: isPlanned?C.accent:isToday?C.surface2:C.surface,
+                            border: isToday?`1px solid ${C.accent}`:`1px solid ${C.border}` }}>
+                          <div style={{ fontSize:10, color:isPlanned?C.bg:C.textSub }}>{DAY_NAMES[d.getDay()].slice(0,3)}</div>
+                          <div style={{ fontSize:14, fontWeight:700, color:isPlanned?C.bg:isToday?C.accent:C.text }}>{d.getDate()}</div>
                         </div>
                       );
                     })}
                   </div>
-
                   <button style={s.cookBtn} onClick={() => { setCookStep(0); setView("cook"); }}>🍳 Start Cooking</button>
                 </div>
               </>
@@ -728,94 +841,107 @@
         );
       }
 
-      // ─── MAIN VIEWS ───────────────────────────────────────────────────────
+      // ── MAIN APP ───────────────────────────────────────────────────────────
       return (
         <div style={s.app}>
-          {toast && <div style={s.toast}>{toast}</div>}
+          {toast && <div role="status" aria-live="polite" style={s.toast}>{toast}</div>}
           <div style={s.header}>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <svg width="28" height="14" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
-                <ellipse cx="60" cy="35" rx="38" ry="28" fill="none" stroke="#e8f5e2" strokeWidth="7"/>
-                <ellipse cx="140" cy="35" rx="38" ry="28" fill="none" stroke="#e8f5e2" strokeWidth="7"/>
-                <rect x="98" y="30" width="4" height="10" fill="#e8f5e2"/>
-                <line x1="22" y1="35" x2="0" y2="28" stroke="#e8f5e2" strokeWidth="5" strokeLinecap="round"/>
-                <line x1="178" y1="35" x2="200" y2="28" stroke="#e8f5e2" strokeWidth="5" strokeLinecap="round"/>
-                <rect x="32" y="20" width="6" height="20" fill="#5cb85c" rx="1"/>
-                <rect x="42" y="26" width="6" height="14" fill="#7bc87a" rx="1"/>
-                <rect x="52" y="15" width="6" height="25" fill="#5cb85c" rx="1"/>
-                <polyline points="110,45 120,28 130,35 150,20 160,30" stroke="#7bc87a" strokeWidth="4" fill="none" strokeLinecap="round"/>
-                <circle cx="160" cy="30" r="4" fill="#7bc87a"/>
-              </svg>
-              <span style={s.headerTitle}>Our Recipes</span>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <svg width="28" height="14" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <ellipse cx="60" cy="35" rx="38" ry="28" fill="none" stroke={C.text} strokeWidth="7"/>
+                  <ellipse cx="140" cy="35" rx="38" ry="28" fill="none" stroke={C.text} strokeWidth="7"/>
+                  <rect x="98" y="30" width="4" height="10" fill={C.text}/>
+                  <line x1="22" y1="35" x2="0" y2="28" stroke={C.text} strokeWidth="5" strokeLinecap="round"/>
+                  <line x1="178" y1="35" x2="200" y2="28" stroke={C.text} strokeWidth="5" strokeLinecap="round"/>
+                  <rect x="32" y="20" width="6" height="20" fill={C.done} rx="1"/>
+                  <rect x="42" y="26" width="6" height="14" fill={C.accent} rx="1"/>
+                  <rect x="52" y="15" width="6" height="25" fill={C.done} rx="1"/>
+                  <polyline points="110,45 120,28 130,35 150,20 160,30" stroke={C.accent} strokeWidth="4" fill="none" strokeLinecap="round"/>
+                  <circle cx="160" cy="30" r="4" fill={C.accent}/>
+                </svg>
+                <span style={s.headerTitle}>Our Recipes</span>
+              </div>
+              <button aria-label="Help" onClick={() => setShowHelp(true)} style={{ background:"none", border:"none", color:C.textMuted, fontSize:18, cursor:"pointer", padding:"4px 8px" }}>?</button>
             </div>
           </div>
+
           <div style={s.content}>
 
             {/* LIBRARY */}
             {view === "library" && (
               <div>
-                {/* Recent cook log */}
+                {/* Tonight banner */}
+                {tonightRecipe ? (
+                  <div role="button" aria-label={`Tonight's dinner: ${tonightRecipe.title}`}
+                    onClick={() => { setSelectedRecipe(tonightRecipe); setPrevView("library"); setServingsCount(null); setView("detail"); }}
+                    style={{ background:"#0f2018", border:`1px solid ${C.accentDim}`, borderRadius:14, padding:"12px 14px", marginBottom:16, cursor:"pointer", display:"flex", alignItems:"center", gap:12 }}>
+                    {tonightRecipe.photo_url
+                      ? <img src={tonightRecipe.photo_url} alt={tonightRecipe.title} style={{ width:48, height:48, borderRadius:8, objectFit:"cover", flexShrink:0 }} loading="lazy" />
+                      : <div style={{ width:48, height:48, borderRadius:8, background:C.surface3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🍴</div>}
+                    <div>
+                      <div style={{ fontSize:10, color:C.accent, textTransform:"uppercase", letterSpacing:1.5, marginBottom:2 }}>Tonight's Dinner</div>
+                      <div style={{ color:C.text, fontSize:15, fontWeight:600 }}>{tonightRecipe.title}</div>
+                    </div>
+                    <div style={{ marginLeft:"auto", color:C.textSub, fontSize:18 }}>›</div>
+                  </div>
+                ) : (
+                  <div onClick={() => setView("planner")}
+                    style={{ background:C.surface, border:`1px dashed ${C.border}`, borderRadius:14, padding:"12px 14px", marginBottom:16, cursor:"pointer", display:"flex", alignItems:"center", gap:12 }}>
+                    <div style={{ fontSize:24 }}>📅</div>
+                    <div style={{ color:C.textSub, fontSize:14 }}>Nothing planned for tonight — tap to plan</div>
+                  </div>
+                )}
+
+                {/* Cook log */}
                 {cookLog.length > 0 && (
                   <div style={{ marginBottom:12 }}>
-                    <div style={{ fontSize:11, color:"#2d5b3f", textTransform:"uppercase", letterSpacing:1.5, marginBottom:6 }}>Recently cooked</div>
+                    <div style={{ fontSize:11, color:C.textFaint, textTransform:"uppercase", letterSpacing:1.5, marginBottom:6 }}>Recently cooked</div>
                     <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
                       {cookLog.slice(0,5).map((entry, i) => (
-                        <div key={i} style={{ flexShrink:0, background:"#111f18", borderRadius:10, padding:"6px 12px", fontSize:12, color:"#5a8a68", whiteSpace:"nowrap" }}>
-                          {entry.recipeTitle} <span style={{ color:"#1e3a2a" }}>· {entry.date}</span>
+                        <div key={i} style={{ flexShrink:0, background:C.surface, borderRadius:10, padding:"6px 12px", fontSize:12, color:C.textSub, whiteSpace:"nowrap" }}>
+                          {entry.recipeTitle} <span style={{ color:C.textFaint }}>· {formatCookDate(entry.date)}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Tonight banner */}
-                {tonightRecipe && (
-                  <div onClick={() => { setSelectedRecipe(tonightRecipe); setPrevView("library"); setServingsScale(1); setView("detail"); }}
-                    style={{ background:"#0f1f14", border:"1px solid #2a5a35", borderRadius:14, padding:"12px 14px", marginBottom:16, cursor:"pointer", display:"flex", alignItems:"center", gap:12 }}>
-                    {tonightRecipe.photo_url
-                      ? <img src={tonightRecipe.photo_url} style={{ width:48, height:48, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
-                      : <div style={{ width:48, height:48, borderRadius:8, background:"#333", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🍴</div>}
-                    <div>
-                      <div style={{ fontSize:10, color:"#7bc87a", textTransform:"uppercase", letterSpacing:1.5, marginBottom:2 }}>Tonight's Dinner</div>
-                      <div style={{ color:"#e8f5e2", fontSize:15, fontWeight:600 }}>{tonightRecipe.title}</div>
-                    </div>
-                    <div style={{ marginLeft:"auto", color:"#5a8a68", fontSize:18 }}>›</div>
-                  </div>
-                )}
-
-                {/* Search + sort row */}
+                {/* Search + sort */}
                 <div style={{ display:"flex", gap:8, marginBottom:10 }}>
-                  <input style={{ ...s.searchInput, marginBottom:0, flex:1 }} placeholder="Search recipes..." value={search} onChange={e => setSearch(e.target.value)} />
-                  <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-                    style={{ background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:10, color:"#6a9a78", padding:"0 10px", fontSize:13, flexShrink:0 }}>
+                  <input style={{ ...s.searchInput, marginBottom:0, flex:1 }} placeholder="Search recipes..." value={search} onChange={e => setSearch(e.target.value)} aria-label="Search recipes" />
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value)} aria-label="Sort recipes"
+                    style={{ background:C.surface2, border:`1px solid ${C.border}`, borderRadius:10, color:C.textSub, padding:"0 10px", fontSize:13, flexShrink:0 }}>
                     <option value="newest">New</option>
                     <option value="az">A–Z</option>
                     <option value="rating">★</option>
                   </select>
                 </div>
 
-                <div style={s.catRow}>
-                  <button style={{ ...s.catBtn, ...(filterFav?{background:"#7bc87a",border:"1px solid #e07b4a",color:"#e8f5e2"}:{}) }} onClick={() => { setFilterFav(f=>!f); setFilterCat("All"); }}>♥ Faves</button>
+                <div style={s.catRow} role="group" aria-label="Filter by category">
+                  <button style={{ ...s.catBtn, ...(filterFav?s.catBtnActive:{}) }} onClick={() => { setFilterFav(f=>!f); setFilterCat("All"); }} aria-pressed={filterFav}>♥ Faves</button>
                   {["All",...CATEGORIES].map(c => (
-                    <button key={c} style={{ ...s.catBtn, ...(filterCat===c&&!filterFav?s.catBtnActive:{}) }} onClick={() => { setFilterCat(c); setFilterFav(false); }}>{c}</button>
+                    <button key={c} style={{ ...s.catBtn, ...(filterCat===c&&!filterFav?s.catBtnActive:{}) }} onClick={() => { setFilterCat(c); setFilterFav(false); }} aria-pressed={filterCat===c&&!filterFav}>{c}</button>
                   ))}
                 </div>
 
                 {filteredRecipes.length===0 && <div style={s.empty}>{recipes.length===0?"No recipes yet. Add one!":"No recipes match."}</div>}
-                <div style={s.recipeGrid}>
+                <div style={s.recipeGrid} role="list">
                   {filteredRecipes.map(r => {
-                    const plannedDates = Object.entries(plannerData).filter(([k,v]) => v?.recipe_id === r.id).map(([k]) => k);
-                    const upcomingDates = plannedDates.filter(k => k >= todayKey);
+                    const upcomingDates = Object.entries(plannerData).filter(([k,v]) => v?.recipe_id===r.id && k>=todayKey).map(([k])=>k);
                     return (
-                      <div key={r.id} style={s.recipeCard} onClick={() => { setSelectedRecipe(r); setPrevView("library"); setServingsScale(1); setView("detail"); }}>
-                        {r.is_favourite && <div style={{ position:"absolute", top:6, right:8, fontSize:16, color:"#7bc87a", zIndex:1 }}>♥</div>}
-                        {r.photo_url ? <img src={r.photo_url} alt="" style={s.recipeThumb} /> : <div style={s.recipePlaceholder}>🍴</div>}
+                      <div key={r.id} role="listitem" style={s.recipeCard}
+                        onClick={() => { setSelectedRecipe(r); setPrevView("library"); setServingsCount(null); setView("detail"); }}>
+                        {r.is_favourite && <div aria-label="Favourite" style={{ position:"absolute", top:6, right:8, fontSize:16, color:C.accent, zIndex:1 }}>♥</div>}
+                        {r.photo_url
+                          ? <img src={r.photo_url} alt={r.title} style={s.recipeThumb} loading="lazy" />
+                          : <div style={s.recipePlaceholder} aria-hidden="true">🍴</div>}
                         <div style={s.recipeCardBody}>
                           <div style={s.recipeCardCat}>{r.category}</div>
                           <div style={s.recipeCardTitle}>{r.title}</div>
-                          {(r.prep_time||r.cook_time) && <div style={{ fontSize:10, color:"#3d6b4f", marginTop:3 }}>{[r.prep_time&&`⏱${r.prep_time}`,r.cook_time&&`🍳${r.cook_time}`].filter(Boolean).join(" · ")}</div>}
-                          {upcomingDates.length > 0 && <div style={{ fontSize:10, color:"#5a8a68", marginTop:3 }}>📅 {upcomingDates.length > 1 ? `${upcomingDates.length} days planned` : new Date(upcomingDates[0]+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</div>}
-                          {r.rating > 0 && <div style={{ fontSize:11, color:"#7bc87a", marginTop:2 }}>{"★".repeat(r.rating)}</div>}
+                          {(r.prep_time||r.cook_time) && <div style={{ fontSize:10, color:C.textMuted, marginTop:3 }}>{[r.prep_time&&`⏱${r.prep_time}`,r.cook_time&&`🍳${r.cook_time}`].filter(Boolean).join(" · ")}</div>}
+                          {upcomingDates.length>0 && <div style={{ fontSize:10, color:C.textSub, marginTop:3 }}>📅 {upcomingDates.length>1?`${upcomingDates.length} days planned`:formatCookDate(upcomingDates[0])}</div>}
+                          {r.rating>0 && <div aria-label={`${r.rating} stars`} style={{ fontSize:11, color:C.accent, marginTop:2 }}>{"★".repeat(r.rating)}</div>}
                         </div>
                       </div>
                     );
@@ -828,43 +954,58 @@
             {view === "add" && (
               <div style={s.formWrap}>
                 <h2 style={s.formHeading}>Add Recipe</h2>
-                <div style={s.uploadBox}>
-                  <div style={s.uploadLabel}>📎 Upload from Claude JSON</div>
-                  <label style={s.uploadBtn}>
-                    Choose file
-                    <input ref={fileInputRef} type="file" accept=".json" style={{ display:"none" }} onChange={handleJsonUpload} />
-                  </label>
-                  {uploadError && <div style={{ color:"#7bc87a", fontSize:13, marginTop:6 }}>{uploadError}</div>}
+
+                {/* Quick add toggle */}
+                <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                  <button onClick={() => setQuickAdd(false)} style={{ ...s.catBtn, ...((!quickAdd)?s.catBtnActive:{}) }}>Full recipe</button>
+                  <button onClick={() => setQuickAdd(true)} style={{ ...s.catBtn, ...(quickAdd?s.catBtnActive:{}) }}>⚡ Quick add</button>
                 </div>
-                <div style={s.divider}>— or fill in manually —</div>
-                <label style={s.label}>Title *</label>
-                <input style={s.input} value={form.title} onChange={e => setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Pasta Carbonara" />
-                <label style={s.label}>Category</label>
-                <select style={s.input} value={form.category} onChange={e => setForm(f=>({...f,category:e.target.value}))}>
-                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+                {quickAdd ? (
                   <div>
-                    <label style={s.label}>Prep time</label>
-                    <input style={s.input} value={form.prep_time} onChange={e => setForm(f=>({...f,prep_time:e.target.value}))} placeholder="10 min" />
+                    <div style={{ color:C.textSub, fontSize:13, marginBottom:16 }}>Just the essentials — add steps later via Edit.</div>
+                    <label style={s.label} htmlFor="quick-title">Recipe name *</label>
+                    <input id="quick-title" style={s.input} value={quickTitle} onChange={e => setQuickTitle(e.target.value)} placeholder="e.g. Pasta Carbonara" />
+                    <label style={s.label} htmlFor="quick-ings">Ingredients (one per line)</label>
+                    <textarea id="quick-ings" style={s.textarea} rows={5} value={quickIngredients} onChange={e => setQuickIngredients(e.target.value)} placeholder={"200g pasta\n2 eggs\n100g pancetta"} />
+                    <button style={s.submitBtn} onClick={handleQuickAdd} disabled={loading}>{loading?"Saving...":"Save Recipe"}</button>
                   </div>
+                ) : (
                   <div>
-                    <label style={s.label}>Cook time</label>
-                    <input style={s.input} value={form.cook_time} onChange={e => setForm(f=>({...f,cook_time:e.target.value}))} placeholder="30 min" />
+                    <div style={s.uploadBox}>
+                      <div style={s.uploadLabel}>📎 Upload from Claude JSON</div>
+                      <div style={{ color:C.textMuted, fontSize:12, marginBottom:10 }}>Select one or multiple files at once</div>
+                      <label style={s.uploadBtn}>
+                        Choose files
+                        <input ref={fileInputRef} type="file" accept=".json" multiple style={{ display:"none" }} onChange={handleJsonUpload} aria-label="Upload JSON recipe files" />
+                      </label>
+                      {uploadError && <div role="alert" style={{ color:C.danger, fontSize:13, marginTop:6 }}>{uploadError}</div>}
+                    </div>
+                    <div style={s.divider}>— or fill in manually —</div>
+                    <label style={s.label} htmlFor="add-title">Title *</label>
+                    <input id="add-title" style={s.input} value={form.title} onChange={e => setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Pasta Carbonara" />
+                    <label style={s.label} htmlFor="add-cat">Category</label>
+                    <select id="add-cat" style={s.input} value={form.category} onChange={e => setForm(f=>({...f,category:e.target.value}))}>
+                      {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      <div><label style={s.label} htmlFor="add-prep">Prep time</label><input id="add-prep" style={s.input} value={form.prep_time} onChange={e => setForm(f=>({...f,prep_time:e.target.value}))} placeholder="10 min" /></div>
+                      <div><label style={s.label} htmlFor="add-cook">Cook time</label><input id="add-cook" style={s.input} value={form.cook_time} onChange={e => setForm(f=>({...f,cook_time:e.target.value}))} placeholder="30 min" /></div>
+                    </div>
+                    <label style={s.label} htmlFor="add-servings">Servings</label>
+                    <input id="add-servings" style={s.input} type="number" min="1" value={form.servings} onChange={e => setForm(f=>({...f,servings:e.target.value}))} />
+                    <label style={s.label} htmlFor="add-source">Source URL (optional)</label>
+                    <input id="add-source" style={s.input} value={form.source_url} onChange={e => setForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
+                    <label style={s.label} htmlFor="add-photo">Photo URL (optional)</label>
+                    <input id="add-photo" style={s.input} value={form.photo_url} onChange={e => setForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
+                    <label style={s.label} htmlFor="add-ings">Ingredients (one per line)</label>
+                    <textarea id="add-ings" style={s.textarea} value={form.ingredients} onChange={e => setForm(f=>({...f,ingredients:e.target.value}))} placeholder={"200g pasta\n2 eggs\n100g pancetta"} rows={5} />
+                    <label style={s.label} htmlFor="add-steps">Steps (one per line)</label>
+                    <textarea id="add-steps" style={s.textarea} value={form.steps} onChange={e => setForm(f=>({...f,steps:e.target.value}))} placeholder={"Boil pasta\nFry pancetta\nMix eggs and cheese"} rows={5} />
+                    {formError && <div role="alert" style={{ color:C.danger, marginBottom:8 }}>{formError}</div>}
+                    <button style={s.submitBtn} onClick={handleFormSubmit} disabled={loading}>{loading?"Saving...":"Save Recipe"}</button>
                   </div>
-                </div>
-                <label style={s.label}>Servings</label>
-                <input style={s.input} type="number" min="1" value={form.servings} onChange={e => setForm(f=>({...f,servings:e.target.value}))} />
-                <label style={s.label}>Source URL (optional)</label>
-                <input style={s.input} value={form.source_url} onChange={e => setForm(f=>({...f,source_url:e.target.value}))} placeholder="https://..." />
-                <label style={s.label}>Photo URL (optional)</label>
-                <input style={s.input} value={form.photo_url} onChange={e => setForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." />
-                <label style={s.label}>Ingredients (one per line)</label>
-                <textarea style={s.textarea} value={form.ingredients} onChange={e => setForm(f=>({...f,ingredients:e.target.value}))} placeholder={"200g pasta\n2 eggs\n100g pancetta"} rows={5} />
-                <label style={s.label}>Steps (one per line)</label>
-                <textarea style={s.textarea} value={form.steps} onChange={e => setForm(f=>({...f,steps:e.target.value}))} placeholder={"Boil pasta\nFry pancetta\nMix eggs and cheese"} rows={5} />
-                {formError && <div style={{ color:"#7bc87a", marginBottom:8 }}>{formError}</div>}
-                <button style={s.submitBtn} onClick={handleFormSubmit} disabled={loading}>{loading?"Saving...":"Save Recipe"}</button>
+                )}
               </div>
             )}
 
@@ -879,60 +1020,66 @@
                   const isToday = dk === todayKey;
                   const isPast = dk < todayKey;
                   return (
-                    <div key={dk} style={{ ...s.plannerRow, ...(isToday?{border:"1px solid #7bc87a", background:"#0f2018"}:{}), ...(isPast?{opacity:0.55}:{}) }}>
+                    <div key={dk} style={{ ...s.plannerRow, ...(isToday?{border:`1px solid ${C.accent}`, background:"#0f2018"}:{}), ...(isPast?{opacity:0.5}:{}) }}>
                       <div style={{ width:72, flexShrink:0 }}>
-                        <div style={{ fontSize:12, fontWeight:700, color: isToday?"#7bc87a":"#666" }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:isToday?C.accent:C.textSub }}>
                           {DAY_NAMES[d.getDay()].slice(0,3).toUpperCase()}
-                          {isToday && <span style={{ fontSize:8, display:"block", letterSpacing:1 }}>TODAY</span>}
+                          {isToday && <span style={{ fontSize:8, display:"block", letterSpacing:1, color:C.accent }}>TODAY</span>}
                         </div>
-                        <div style={{ fontSize:11, color:"#2d5b3f" }}>{d.getDate()} {SHORT_MONTHS[d.getMonth()]}</div>
+                        <div style={{ fontSize:11, color:C.textFaint }}>{d.getDate()} {SHORT_MONTHS[d.getMonth()]}</div>
                       </div>
                       {recipe
                         ? <div style={s.plannerRecipe}>
                             {recipe.photo_url
-                              ? <img src={recipe.photo_url} style={{ width:44, height:44, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
-                              : <div style={{ width:44, height:44, borderRadius:8, background:"#0f1c15", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🍴</div>}
+                              ? <img src={recipe.photo_url} alt={recipe.title} style={{ width:44, height:44, borderRadius:8, objectFit:"cover", flexShrink:0 }} loading="lazy" />
+                              : <div style={{ width:44, height:44, borderRadius:8, background:C.surface3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }} aria-hidden="true">🍴</div>}
                             <div style={{ flex:1, minWidth:0 }}>
-                              <span style={s.plannerRecipeName} onClick={() => { setSelectedRecipe(recipe); setPrevView("planner"); setServingsScale(1); setView("detail"); }}>{recipe.title}</span>
+                              <span style={s.plannerRecipeName} onClick={() => { setSelectedRecipe(recipe); setPrevView("planner"); setServingsCount(null); setView("detail"); }}>{recipe.title}</span>
                               {isToday && (
-                                <div onClick={() => logCook(recipe.id, recipe.title)}
-                                  style={{ fontSize:11, color:"#5cb85c", cursor:"pointer", marginTop:3 }}>✓ Mark as cooked</div>
+                                <div role="button" onClick={() => logCook(recipe.id, recipe.title)}
+                                  style={{ fontSize:11, color:C.done, cursor:"pointer", marginTop:3 }}>✓ Mark as cooked</div>
                               )}
                             </div>
-                            <button style={s.plannerRemove} onClick={() => unassignDay(dk)}>✕</button>
+                            {!isPast && <button aria-label={`Remove ${recipe.title} from ${DAY_NAMES[d.getDay()]}`} style={s.plannerRemove} onClick={() => unassignDay(dk)}>✕</button>}
                           </div>
-                        : <div style={{ flex:1 }}>
-                            <button onClick={() => { setPickerDay(dk); setPickerSearch(""); }}
-                              style={{ background:"#111f18", border:"1px dashed #333", borderRadius:10, color:"#2d5b3f", fontSize:13, padding:"8px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
-                              <span style={{ color:"#7bc87a", fontSize:16 }}>+</span> Add
+                        : !isPast && (
+                          <div style={{ flex:1 }}>
+                            <button aria-label={`Add recipe to ${DAY_NAMES[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`}
+                              onClick={() => { setPickerDay(dk); setPickerSearch(""); }}
+                              style={{ background:C.surface2, border:`1px dashed ${C.border}`, borderRadius:10, color:C.textMuted, fontSize:13, padding:"10px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:6, minHeight:44 }}>
+                              <span style={{ color:C.accent, fontSize:16 }}>+</span> Add
                             </button>
-                          </div>}
+                          </div>
+                        )}
                     </div>
                   );
                 })}
 
                 {/* Recipe picker overlay */}
                 {pickerDay && (
-                  <div style={s.overlay}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:"#111f18", borderBottom:"1px solid #1e3528", flexShrink:0 }}>
-                      <span style={{ color:"#e8f5e2", fontSize:16, fontWeight:700 }}>
+                  <div style={s.overlay} role="dialog" aria-modal="true" aria-label="Pick a recipe">
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:C.surface, borderBottom:`1px solid ${C.border2}`, flexShrink:0 }}>
+                      <span style={{ color:C.text, fontSize:16, fontWeight:700 }}>
                         Pick for {DAY_NAMES[new Date(pickerDay+"T12:00:00").getDay()]} {new Date(pickerDay+"T12:00:00").getDate()} {SHORT_MONTHS[new Date(pickerDay+"T12:00:00").getMonth()]}
                       </span>
-                      <button onClick={() => setPickerDay(null)} style={{ background:"none", border:"none", color:"#6a9a78", fontSize:22, cursor:"pointer" }}>✕</button>
+                      <button aria-label="Close picker" onClick={() => setPickerDay(null)} style={{ background:"none", border:"none", color:C.textSub, fontSize:22, cursor:"pointer", padding:"4px 8px", minWidth:44, minHeight:44 }}>✕</button>
                     </div>
                     <div style={{ padding:"12px 16px 8px", flexShrink:0 }}>
-                      <input style={s.searchInput} placeholder="Search recipes..." value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} autoFocus />
+                      <input style={s.searchInput} placeholder="Search recipes..." value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} aria-label="Search recipes" autoFocus />
                     </div>
                     <div style={{ overflowY:"auto", flex:1 }}>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, padding:"0 16px 24px" }}>
                         {recipes.filter(r => r.title.toLowerCase().includes(pickerSearch.toLowerCase())).map(r => (
-                          <div key={r.id} onClick={() => { assignDay(pickerDay, r.id); setPickerDay(null); }}
-                            style={{ background:"#111f18", borderRadius:14, overflow:"hidden", cursor:"pointer", border:"1px solid #2a4a35" }}>
-                            {r.photo_url ? <img src={r.photo_url} alt="" style={{ width:"100%", height:110, objectFit:"cover" }} /> : <div style={{ width:"100%", height:110, background:"#0f1c15", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 }}>🍴</div>}
+                          <div key={r.id} role="button" aria-label={`Select ${r.title}`}
+                            onClick={() => { assignDay(pickerDay, r.id); setPickerDay(null); }}
+                            style={{ background:C.surface, borderRadius:14, overflow:"hidden", cursor:"pointer", border:`1px solid ${C.border}` }}>
+                            {r.photo_url
+                              ? <img src={r.photo_url} alt={r.title} style={{ width:"100%", height:110, objectFit:"cover" }} loading="lazy" />
+                              : <div style={{ width:"100%", height:110, background:C.surface3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 }} aria-hidden="true">🍴</div>}
                             <div style={{ padding:"8px 10px 10px" }}>
-                              <div style={{ fontSize:11, color:"#7bc87a", textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>{r.category}</div>
-                              <div style={{ fontSize:13, color:"#e8f5e2", fontWeight:600, lineHeight:1.3 }}>{r.title}</div>
-                              {r.rating > 0 && <div style={{ fontSize:10, color:"#7bc87a", marginTop:2 }}>{"★".repeat(r.rating)}</div>}
+                              <div style={{ fontSize:11, color:C.accent, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>{r.category}</div>
+                              <div style={{ fontSize:13, color:C.text, fontWeight:600, lineHeight:1.3 }}>{r.title}</div>
+                              {r.rating>0 && <div aria-label={`${r.rating} stars`} style={{ fontSize:10, color:C.accent, marginTop:2 }}>{"★".repeat(r.rating)}</div>}
                             </div>
                           </div>
                         ))}
@@ -948,76 +1095,83 @@
               <div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                   <h2 style={{ ...s.formHeading, marginBottom:0 }}>Shopping List</h2>
-                  {Object.keys(shopTicks).length > 0 && (
+                  {(Object.keys(shopTicks).length > 0 || customShopItems.length > 0) && (
                     <button onClick={async () => {
                       await sbDelete("shopping_ticks", `week_start=eq.${weekStart}`);
-                      setShopTicks({});
-                      setCustomShopItems([]);
+                      setShopTicks({}); setCustomShopItems([]);
                       try { localStorage.removeItem("customShopItems"); } catch(e) {}
                       showToast("List cleared!");
-                    }} style={{ background:"#1a2e22", border:"1px solid #2a4a35", borderRadius:8, color:"#6a9a78", fontSize:12, padding:"6px 12px", cursor:"pointer" }}>Clear all</button>
+                    }} style={{ background:C.surface2, border:`1px solid ${C.border}`, borderRadius:8, color:C.textSub, fontSize:12, padding:"6px 12px", cursor:"pointer" }}>Clear all</button>
                   )}
                 </div>
                 {(() => {
                   const groups = buildShopGroups();
                   const allGroups = [...Object.keys(SHOP_GROUPS), "Other"].filter(g => groups[g]?.length > 0);
-                  if (allGroups.length === 0) return <div style={s.empty}>Plan your week first to generate a list!</div>;
+                  const hasCustom = customShopItems.length > 0;
+                  if (allGroups.length === 0 && !hasCustom) return (
+                    <div style={{ textAlign:"center", marginTop:40 }}>
+                      <div style={{ fontSize:40, marginBottom:12 }}>🛒</div>
+                      <div style={{ color:C.textSub, fontSize:15 }}>Plan your week first to generate a list!</div>
+                      <button onClick={() => setView("planner")} style={{ ...s.submitBtn, marginTop:16, maxWidth:200, padding:"12px 0" }}>Go to planner</button>
+                    </div>
+                  );
                   return <>
-                    <div style={{ color:"#5a8a68", fontSize:13, marginBottom:16 }}>This week's ingredients — synced for both of you.</div>
+                    <div style={{ color:C.textSub, fontSize:13, marginBottom:16 }}>Synced for both of you · resets each week</div>
                     {allGroups.map(g => {
                       const ings = groups[g];
                       const unticked = ings.filter(i => !shopTicks[i]);
                       const ticked = ings.filter(i => shopTicks[i]);
                       return (
                         <div key={g} style={s.shopGroup}>
-                          <div style={s.shopGroupLabel}>{g} {ticked.length > 0 && <span style={{ color:"#2d5b3f", fontWeight:400 }}>({ticked.length}/{ings.length})</span>}</div>
-                          {/* Unticked first */}
-                          {unticked.map((ing, i) => (
-                            <div key={i} style={s.shopItem} onClick={() => toggleShopTick(ing)}>
-                              <div style={s.shopCheck}></div>
-                              <span style={{ color:"#e8f5e2" }}>{ing}</span>
+                          <div style={s.shopGroupLabel}>{g} {ticked.length>0 && <span style={{ color:C.textFaint, fontWeight:400 }}>({ticked.length}/{ings.length})</span>}</div>
+                          {unticked.map((ing,i) => (
+                            <div key={i} role="checkbox" aria-checked={false} aria-label={ing} style={s.shopItem} onClick={() => toggleShopTick(ing)}>
+                              <div style={s.shopCheck} aria-hidden="true"></div>
+                              <span style={{ color:C.text }}>{ing}</span>
                             </div>
                           ))}
-                          {/* Ticked at bottom */}
-                          {ticked.map((ing, i) => (
-                            <div key={i} style={s.shopItem} onClick={() => toggleShopTick(ing)}>
-                              <div style={{ ...s.shopCheck, ...s.shopCheckDone }}>✓</div>
-                              <span style={{ textDecoration:"line-through", color:"#1e3a2a" }}>{ing}</span>
+                          {ticked.map((ing,i) => (
+                            <div key={i} role="checkbox" aria-checked={true} aria-label={`${ing}, ticked`} style={s.shopItem} onClick={() => toggleShopTick(ing)}>
+                              <div style={{ ...s.shopCheck, ...s.shopCheckDone }} aria-hidden="true">✓</div>
+                              <span style={{ textDecoration:"line-through", color:C.textFaint }}>{ing}</span>
                             </div>
                           ))}
                         </div>
                       );
                     })}
-                    {/* Custom items section */}
-                    <div style={s.shopGroup}>
-                      <div style={s.shopGroupLabel}>Extra items</div>
-                      {customShopItems.map((item, i) => (
-                        <div key={i} style={{ ...s.shopItem, justifyContent:"space-between" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:12, flex:1 }} onClick={() => toggleShopTick("__custom__"+item)}>
-                            <div style={{ ...s.shopCheck, ...(shopTicks["__custom__"+item]?s.shopCheckDone:{}) }}>{shopTicks["__custom__"+item]?"✓":""}</div>
-                            <span style={{ textDecoration:shopTicks["__custom__"+item]?"line-through":"none", color:shopTicks["__custom__"+item]?"#444":"#eee" }}>{item}</span>
+                    {/* Custom items */}
+                    {(customShopItems.length > 0 || true) && (
+                      <div style={s.shopGroup}>
+                        {customShopItems.length > 0 && <div style={s.shopGroupLabel}>Extra items</div>}
+                        {customShopItems.map((item, i) => (
+                          <div key={i} style={{ ...s.shopItem, justifyContent:"space-between" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:12, flex:1 }} role="checkbox" aria-checked={!!shopTicks["__custom__"+item]} aria-label={item} onClick={() => toggleShopTick("__custom__"+item)}>
+                              <div style={{ ...s.shopCheck, ...(shopTicks["__custom__"+item]?s.shopCheckDone:{}) }} aria-hidden="true">{shopTicks["__custom__"+item]?"✓":""}</div>
+                              <span style={{ textDecoration:shopTicks["__custom__"+item]?"line-through":"none", color:shopTicks["__custom__"+item]?C.textFaint:C.text }}>{item}</span>
+                            </div>
+                            <button aria-label={`Remove ${item}`} onClick={() => removeCustomShopItemFn(i)} style={{ background:"none", border:"none", color:C.textFaint, fontSize:16, cursor:"pointer", padding:"4px 8px", minWidth:36, minHeight:36 }}>✕</button>
                           </div>
-                          <button onClick={() => removeCustomShopItem(i)} style={{ background:"none", border:"none", color:"#1e3a2a", fontSize:16, cursor:"pointer", padding:"0 4px" }}>✕</button>
+                        ))}
+                        <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                          <input aria-label="Add custom item" style={{ ...s.input, flex:1, padding:"10px 12px", fontSize:14 }}
+                            value={newCustomItem} onChange={e => setNewCustomItem(e.target.value)}
+                            onKeyDown={e => e.key==="Enter" && addCustomShopItemFn()}
+                            placeholder="Add item..." />
+                          <button aria-label="Add item" onClick={addCustomShopItemFn} style={{ background:C.accent, border:"none", borderRadius:10, color:C.bg, fontWeight:700, fontSize:20, width:44, height:44, cursor:"pointer", flexShrink:0 }}>+</button>
                         </div>
-                      ))}
-                      <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                        <input style={{ ...s.input, flex:1, padding:"8px 12px", fontSize:14 }}
-                          value={newCustomItem} onChange={e => setNewCustomItem(e.target.value)}
-                          onKeyDown={e => e.key==="Enter" && addCustomShopItem()}
-                          placeholder="Add item..." />
-                        <button onClick={addCustomShopItem} style={{ background:"#7bc87a", border:"none", borderRadius:10, color:"#e8f5e2", fontWeight:700, fontSize:20, width:40, cursor:"pointer", flexShrink:0 }}>+</button>
                       </div>
-                    </div>
+                    )}
                   </>;
                 })()}
               </div>
             )}
           </div>
 
-          <div style={s.nav}>
-            {[{id:"library",icon:"📚",label:"Recipes"},{id:"add",icon:"➕",label:"Add"},{id:"planner",icon:"📅",label:"Planner"},{id:"shopping",icon:"🛒",label:"Shopping"}].map(tab => (
-              <button key={tab.id} style={{ ...s.navBtn, ...(view===tab.id?s.navBtnActive:{}) }} onClick={() => setView(tab.id)}>
-                <span style={s.navIcon}>{tab.icon}</span>
+          <div style={s.nav} role="navigation" aria-label="Main navigation">
+            {[{id:"library",icon:"📚",label:"Recipes"},{id:"add",icon:"📝",label:"Add"},{id:"planner",icon:"📅",label:"Planner"},{id:"shopping",icon:"🛒",label:"Shopping"}].map(tab => (
+              <button key={tab.id} aria-label={tab.label} aria-current={view===tab.id?"page":undefined}
+                style={{ ...s.navBtn, ...(view===tab.id?s.navBtnActive:{}) }} onClick={() => setView(tab.id)}>
+                <span style={s.navIcon} aria-hidden="true">{tab.icon}</span>
                 <span style={s.navLabel}>{tab.label}</span>
               </button>
             ))}
@@ -1029,7 +1183,6 @@
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
   <script>
-    // Register service worker for PWA / offline support
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("/sw.js").catch(() => {});
