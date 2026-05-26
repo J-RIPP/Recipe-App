@@ -5,19 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Our Recipes</title>
   <meta name="theme-color" content="#0d1a14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Syne:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d1a14; font-family: Georgia, serif; }
-    input, select, textarea, button { font-family: Georgia, serif; outline: none; }
+    body { background: #0a1510; font-family: 'Syne', Georgia, serif; }
+    input, select, textarea, button { font-family: 'Syne', Georgia, serif; outline: none; }
     ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: #0d1a14; }
+    ::-webkit-scrollbar-track { background: #0a1510; }
     ::-webkit-scrollbar-thumb { background: #2a4a35; border-radius: 2px; }
+
+    /* Forest atmosphere */
+    .forest-bg {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .forest-bg::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to top, #040d08 0%, #071109 15%, #0a1510 40%, transparent 100%);
+    }
+    .tree-layer { position: absolute; bottom: 0; left: 0; width: 100%; }
+    .glow-top {
+      position: fixed; width: 600px; height: 300px; top: -100px; left: 50%;
+      transform: translateX(-50%);
+      background: radial-gradient(ellipse, rgba(123,200,122,0.06) 0%, transparent 70%);
+      filter: blur(60px); pointer-events: none; z-index: 0;
+    }
+    #root { position: relative; z-index: 1; }
   </style>
 </head>
 <body>
+  <!-- Forest atmosphere -->
+  <div class="glow-top"></div>
+  <div class="forest-bg">
+    <div class="tree-layer" style="opacity:0.10;">
+      <svg viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,320 L0,220 L60,180 L90,200 L130,140 L160,160 L200,100 L230,130 L270,80 L300,110 L340,60 L370,90 L410,50 L440,80 L480,120 L510,90 L550,130 L590,70 L620,100 L660,50 L700,80 L740,30 L770,60 L810,90 L840,50 L880,80 L920,40 L950,70 L990,100 L1020,60 L1060,90 L1100,50 L1130,80 L1170,120 L1200,80 L1240,110 L1280,70 L1310,100 L1350,140 L1380,110 L1440,160 L1440,320 Z" fill="#1a3a25"/>
+      </svg>
+    </div>
+    <div class="tree-layer" style="opacity:0.20;">
+      <svg viewBox="0 0 1440 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,200 L0,160 L20,140 L40,160 L55,120 L70,145 L85,100 L100,130 L115,90 L130,115 L145,80 L160,105 L175,130 L190,100 L210,140 L230,110 L250,150 L270,120 L290,160 L310,130 L330,160 L360,110 L390,140 L420,100 L450,130 L480,90 L510,120 L540,80 L570,110 L600,140 L630,100 L660,130 L690,80 L720,110 L750,150 L780,110 L810,140 L840,90 L870,120 L900,80 L930,110 L960,140 L990,100 L1020,130 L1050,90 L1080,120 L1110,80 L1140,110 L1170,140 L1200,110 L1230,140 L1260,100 L1290,130 L1320,90 L1350,120 L1380,150 L1410,130 L1440,160 L1440,200 Z" fill="#0d2018"/>
+      </svg>
+    </div>
+  </div>
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
@@ -123,8 +157,8 @@
     }
 
     const C = {
-      bg:"#0d1a14", surface:"#111f18", surface2:"#1a2e22", surface3:"#1e3528",
-      border:"#2a4a35", border2:"#1e3528",
+      bg:"#0a1510", surface:"#0d1a14", surface2:"#111f18", surface3:"#1a2e22",
+      border:"#1e3528", border2:"#162a1f",
       accent:"#7bc87a", text:"#e8f5e2", textSub:"#6a9a78", textMuted:"#4a7a58", textFaint:"#2d5b3f",
       danger:"#c0524a", done:"#5cb85c",
     };
@@ -253,6 +287,8 @@
             if (stored) setCustomShopItems(JSON.parse(stored));
             const log = localStorage.getItem("cookLog");
             if (log) setCookLog(JSON.parse(log));
+            // Clear any old pinRemember that may cause issues
+            localStorage.removeItem("pinRemember");
           } catch(e) {}
           const timeout = setTimeout(() => { setAppLoading(false); setConnectionError(true); }, 10000);
           Promise.all([fetchRecipes(), fetchPlannerData(), fetchShopTicks()])
@@ -456,8 +492,23 @@
       if (!authed) return (
         <div style={s.pinScreen}>
           <div style={s.pinCard}>
-            <div style={{ fontSize:48, marginBottom:8 }}>🍽️</div>
-            <h1 style={s.pinTitle}>Our Recipes</h1>
+              <div style={{ marginBottom:16 }}>
+              <svg width="64" height="64" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="80" height="80" rx="18" fill="#111f18"/>
+                <rect x="8" y="30" width="26" height="20" rx="6" stroke="#7bc87a" strokeWidth="2.5" fill="none"/>
+                <rect x="46" y="30" width="26" height="20" rx="6" stroke="#7bc87a" strokeWidth="2.5" fill="none"/>
+                <line x1="34" y1="40" x2="46" y2="40" stroke="#7bc87a" strokeWidth="2.5"/>
+                <line x1="8" y1="40" x2="4" y2="40" stroke="#7bc87a" strokeWidth="2.5"/>
+                <line x1="72" y1="40" x2="76" y2="40" stroke="#7bc87a" strokeWidth="2.5"/>
+                <rect x="13" y="44" width="4" height="4" rx="1" fill="#7bc87a" opacity="0.5"/>
+                <rect x="19" y="40" width="4" height="8" rx="1" fill="#7bc87a" opacity="0.8"/>
+                <rect x="25" y="36" width="4" height="12" rx="1" fill="#7bc87a"/>
+                <polyline points="51,48 57,42 63,44 69,36" stroke="#c8a84b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <circle cx="69" cy="36" r="2" fill="#c8a84b"/>
+              </svg>
+            </div>
+            <h1 style={{ ...s.pinTitle, fontFamily:"'DM Serif Display', serif" }}>Our Recipes</h1>
+            <p style={{ fontSize:11, color:C.textFaint, letterSpacing:2, textTransform:"uppercase", marginBottom:4 }}>by DataIsCool</p>
             <p style={s.pinSub}>Enter PIN to continue</p>
             <div style={{ display:"flex", gap:8, justifyContent:"center", margin:"20px 0" }}>
               {[0,1,2,3].map(i => <div key={i} style={{ ...s.pinDot, background: pin.length > i ? C.accent : C.surface3 }} />)}
@@ -665,7 +716,24 @@
       return (
         <div style={s.app}>
           {toast && <div style={s.toast}>{toast}</div>}
-          <div style={s.header}><span style={s.headerTitle}>🍽️ Our Recipes</span></div>
+          <div style={s.header}>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <svg width="28" height="28" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="80" height="80" rx="18" fill="#111f18"/>
+                <rect x="8" y="30" width="26" height="20" rx="6" stroke="#7bc87a" strokeWidth="2.5" fill="none"/>
+                <rect x="46" y="30" width="26" height="20" rx="6" stroke="#7bc87a" strokeWidth="2.5" fill="none"/>
+                <line x1="34" y1="40" x2="46" y2="40" stroke="#7bc87a" strokeWidth="2.5"/>
+                <line x1="8" y1="40" x2="4" y2="40" stroke="#7bc87a" strokeWidth="2.5"/>
+                <line x1="72" y1="40" x2="76" y2="40" stroke="#7bc87a" strokeWidth="2.5"/>
+                <rect x="13" y="44" width="4" height="4" rx="1" fill="#7bc87a" opacity="0.5"/>
+                <rect x="19" y="40" width="4" height="8" rx="1" fill="#7bc87a" opacity="0.8"/>
+                <rect x="25" y="36" width="4" height="12" rx="1" fill="#7bc87a"/>
+                <polyline points="51,48 57,42 63,44 69,36" stroke="#c8a84b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <circle cx="69" cy="36" r="2" fill="#c8a84b"/>
+              </svg>
+              <span style={{ ...s.headerTitle, fontFamily:"'DM Serif Display', serif" }}>Our Recipes</span>
+            </div>
+          </div>
           <div style={s.content}>
 
             {view === "library" && (
