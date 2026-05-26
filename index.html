@@ -31,6 +31,7 @@
     const SB_URL = "https://tkpwseiasagnzerodiwl.supabase.co";
     const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ";
     const CORRECT_PIN = "0412";
+    const APP_VERSION = "1.4.0";
     const PIN_REMEMBER_DAYS = 7;
     const CATEGORIES = ["Breakfast","Lunch","Dinner","Snack","Dessert","Other"];
     const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -862,7 +863,7 @@
                 </svg>
                 <span style={s.headerTitle}>Our Recipes</span>
               </div>
-              <button aria-label="Help" onClick={() => setShowHelp(true)} style={{ background:"none", border:"none", color:C.textMuted, fontSize:18, cursor:"pointer", padding:"4px 8px" }}>?</button>
+              <button aria-label="Help" onClick={() => setShowHelp(true)} style={{ background:"none", border:"none", color:C.textMuted, fontSize:18, cursor:"pointer", padding:"4px 8px" }} title={}>?</button>
             </div>
           </div>
 
