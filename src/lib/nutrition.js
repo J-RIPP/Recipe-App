@@ -188,6 +188,7 @@ function parseQty(s) {
 }
 
 const UNITS = [
+  [/^(lbs?|pounds?)\b\.?/i, 'lb'], [/^(oz|ounces?)\b\.?/i, 'oz'], [/^(pints?)\b/i, 'pint'],
   [/^(kg|kilo(?:gram)?)\b/i, 'kg'], [/^(g|gr|gram|grams)\b\.?/i, 'g'], [/^(mg)\b/i, 'mg'],
   [/^(l|liter|litre)\b/i, 'l'], [/^(dl|deciliter)\b/i, 'dl'], [/^(cl)\b/i, 'cl'], [/^(ml|milliliter)\b/i, 'ml'],
   [/^(el|eetlepels?|eetl\.?|tbsp|tablespoons?|tbs)\b\.?/i, 'el'], [/^(tl|theelepels?|theel\.?|tsp|teaspoons?)\b\.?/i, 'tl'],
@@ -213,7 +214,7 @@ export function estimateLine(line) {
   if (qty == null) qty = unit ? 1 : null;
   if (qty == null) return null; // "olijfolie" without amount: can't tell
   const grams = {
-    kg: qty * 1000, g: qty, mg: qty / 1000,
+    kg: qty * 1000, g: qty, mg: qty / 1000, lb: qty * 453.6, oz: qty * 28.35, pint: qty * 300,
     l: qty * 1000 * density, dl: qty * 100 * density, cl: qty * 10 * density, ml: qty * density,
     el: qty * spoon, tl: qty * spoon / 3, cup: qty * 240 * density,
     can: qty * (entry.can || 240), pack: qty * (entry.pack || entry.piece || 200),

@@ -91,6 +91,53 @@ function metaContent(html, prop) {
   return tag ? decode(tag.match(/content=["']([^"']*)["']/i)?.[1] || '') : '';
 }
 
+const ART_ING = /^(?:ingredi[eë]nt(?:s|en|i)?|what you(?:'ll)? need|you(?:'ll)? need|benodigdheden|wat heb je nodig|boodschappen(?:lijst)?)\b/i;
+const ART_STEP = /^(?:directions?|instructions?|method|steps|preparation|how to make(?: it)?|bereiding(?:swijze)?|werkwijze|zo maak je(?: het)?|instructies|aan de slag)\b/i;
+const ART_STOP = /^(affiliate|disclosure|notes?\b|tips?\b|storage|nutrition|voedingswaarde|share|deel|print|recent posts|related|comments?|reacties)/i;
+
+/** Recipe from plain article HTML: the list under an "Ingredients" heading and the one under "Directions". */
+export function parseRecipeFromArticle(html) {
+  let body = html
+    .replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<a\b[^>]*>(?:(?!<\/a>)[\s\S])*?<img[\s\S]*?<\/a>/gi, ' '); // image buttons inside the text (ads, "Try …")
+  const blocks = [];
+  const re = /<(h[1-6]|li|p|dt|dd)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  let m;
+  while ((m = re.exec(body))) blocks.push({ tag: m[1].toLowerCase(), raw: m[2], text: decode(m[2]) });
+
+  const ingredients = [], steps = [];
+  let mode = null, stepsFromLi = false;
+  for (const b of blocks) {
+    const txt = b.text.trim();
+    if (!txt) continue;
+    const short = txt.replace(/[:：]\s*$/, '');
+    const isHeading = /^h[1-6]$/.test(b.tag) || (b.tag === 'p' && txt.length < 45 && /[:：]$/.test(txt));
+    if (short.length < 60 && ART_ING.test(short) && (isHeading || b.tag === 'p')) { mode = 'ing'; continue; }
+    if (short.length < 60 && ART_STEP.test(short) && (isHeading || b.tag === 'p')) { mode = 'step'; continue; }
+    if (!mode) continue;
+    if (ART_STOP.test(txt)) { if (mode === 'step' && steps.length) break; mode = mode === 'ing' && !ingredients.length ? 'ing' : null; continue; }
+    if (isHeading) { if (mode === 'step' && steps.length) break; continue; } // sub-headings like "For the sauce"
+    if (mode === 'ing') {
+      if (b.tag === 'li' || txt.length < 120) ingredients.push(txt);
+    } else if (mode === 'step') {
+      if (b.tag === 'li') stepsFromLi = true;
+      else if (stepsFromLi) continue; // stray paragraphs after a numbered list
+      steps.push(txt.replace(/^(?:stap|step)\s*\d+\s*[:.)-]?\s*/i, '').replace(/^\d{1,2}[.)]\s+/, ''));
+    }
+  }
+  if (ingredients.length < 2) return null;
+
+  const all = blocks.map((b) => b.text).join('\n');
+  const time = all.match(/(?:total time|cook time|bereidingstijd|kooktijd|tijd)\s*:?\s*([0-9][^\n]{0,20}?(?:min\w*|hours?|uur|u))\b/i)?.[1];
+  const serves = all.match(/(?:serving size|servings|serves|yield|porties|personen|voor)\s*:?\s*(\d+)/i)?.[1];
+  return {
+    ingredients,
+    steps,
+    ...(time ? { cook_time: time.trim().replace(/\bhour\b/i, 'hour') } : {}),
+    ...(serves ? { servings: Math.min(+serves, 50) } : {}),
+  };
+}
+
 /** Parse a recipe from a web page's HTML. Returns a partial recipe or null. */
 export function parseRecipeHtml(html, url = '') {
   const blocks = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
@@ -103,9 +150,13 @@ export function parseRecipeHtml(html, url = '') {
     } catch { /* malformed block, skip */ }
   }
   if (!node) {
-    const title = metaContent(html, 'og:title') || decode(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || '');
+    const title = metaContent(html, 'og:title') || decode(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || '') || decode(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || '');
+    const photo_url = metaContent(html, 'og:image');
+    // No recipe data: many blogs (Wix, Squarespace, Blogger…) just have "Ingredients" and "Directions" headings
+    const art = parseRecipeFromArticle(html);
+    if (art) return { title, photo_url, source_url: url, category: guessCategory(title), ...art };
     if (!title) return null;
-    return { title, photo_url: metaContent(html, 'og:image'), source_url: url, ingredients: [], steps: [], partial: true };
+    return { title, photo_url, source_url: url, ingredients: [], steps: [], partial: true };
   }
   const n = node.nutrition || {};
   const num = (v) => { const m = String(v ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/); return m ? Math.round(parseFloat(m[0])) : 0; };

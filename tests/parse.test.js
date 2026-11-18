@@ -83,3 +83,26 @@ test('Firebase config snippet parsing', () => {
   assert.equal(parseConfigSnippet('nonsense'), null);
   assert.equal(isoDuration('PT45M'), '45 min');
 });
+
+test('blog without recipe data (Wix-style headings and lists)', () => {
+  const html = `<html><head><meta property="og:title" content="Roasted Cherry Tomato Bisque Pasta"><meta property="og:image" content="https://static.wixstatic.com/x.jpg">
+  <script type="application/ld+json">{"@type":"BlogPosting","headline":"Roasted"}</script></head><body>
+  <h1>Roasted Cherry Tomato Bisque Pasta</h1>
+  <p><span><strong>Total Time:</strong> 1 hour</span></p><p><span><strong>Serving Size:</strong> 2-4 servings</span></p>
+  <p><em>Penne pasta tossed in a creamy sauce.</em><a href="https://x.com"><img src="a.png"/>Try Artisan Pasta</a></p>
+  <h2><span>Ingredients:</span></h2>
+  <ul><li><p><span>1/2 lb. penne or other short pasta</span><a href="https://shop"><span><img src="b.png"/></span>Try Artisan Pasta</a></p></li>
+  <li><p><span>2 pints cherry tomatoes, halved</span></p></li>
+  <li><p><span>2 tbsp. <a href="https://link.amazon/x">tomato paste</a></span></p></li></ul>
+  <h2><span>Directions:</span></h2>
+  <ol><li><p>Heat the oven to 375°F. Roast for 30-40 minutes.</p></li><li><p>Blend until smooth.</p></li></ol>
+  <p>Affiliate disclosure: I may earn a commission.</p><h1>Recent Posts</h1></body></html>`;
+  const r = parseRecipeHtml(html, 'https://www.thepastatable.com/post/x');
+  assert.equal(r.title, 'Roasted Cherry Tomato Bisque Pasta');
+  assert.equal(r.photo_url, 'https://static.wixstatic.com/x.jpg');
+  assert.deepEqual(r.ingredients, ['1/2 lb. penne or other short pasta', '2 pints cherry tomatoes, halved', '2 tbsp. tomato paste']);
+  assert.deepEqual(r.steps, ['Heat the oven to 375°F. Roast for 30-40 minutes.', 'Blend until smooth.']);
+  assert.equal(r.servings, 2);
+  assert.equal(r.cook_time, '1 hour');
+  assert.equal(r.partial, undefined);
+});
