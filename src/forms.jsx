@@ -63,21 +63,21 @@ export function AddScreen() {
 
   return (
     <>
-      <div className="topbar">
+      <div className="topbar compact">
         <button className="icon-btn" onClick={back} aria-label="Back"><Icon name="back" /></button>
         <h1 className="serif">Add a recipe</h1>
       </div>
-      <div className="screen no-nav stack">
+      <div className="screen no-nav stack" style={{ paddingTop: 16 }}>
         <div className="card stack">
           <label className="field">
-            <span>Paste a link or recipe text</span>
+            <span>Paste a link or recipe text <em>from a website, Instagram, TikTok, WhatsApp</em></span>
             <textarea className="textarea" style={{ minHeight: 130 }} value={text} onChange={(e) => setText(e.target.value)}
-              placeholder={'https://kookmutsjes.com/…\n\nor paste an Instagram/TikTok caption, a WhatsApp message, notes…'} />
+              placeholder={'https://kookmutsjes.com/…\n\nor the full caption text of a post'} />
           </label>
           <div className="grid2">
             <button className="btn" onClick={paste}><Icon name="clip" size={18} /> Paste</button>
             <button className="btn primary" onClick={go} disabled={!text.trim() || busy}>
-              {busy ? <span className="spin" /> : <Icon name="chevR" size={18} />} {busy ? 'Reading…' : 'Continue'}
+              {busy ? <span className="spin" /> : <Icon name="chevR" size={18} />} {busy ? 'Reading the page' : 'Continue'}
             </button>
           </div>
           {msg && (
@@ -92,12 +92,14 @@ export function AddScreen() {
 
         <button className="option" onClick={() => fileRef.current.click()}>
           <span className="ic"><Icon name="camera" /></span>
-          <span><b>Photo or screenshot</b><span className="small muted">Recipe card, cookbook page or screenshot. Type it over with the photo next to it.</span></span>
+          <span><b>Photo or screenshot</b><span className="small muted">A recipe card, cookbook page or screenshot. You type it in with the photo above.</span></span>
+          <span className="chev"><Icon name="chevR" size={20} /></span>
         </button>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickPhoto} />
         <button className="option" onClick={() => toEditor({})}>
           <span className="ic"><Icon name="pen" /></span>
-          <span><b>Start from scratch</b><span className="small muted">Just a title and ingredients is enough. Add steps later.</span></span>
+          <span><b>Type it in</b><span className="small muted">A title and ingredients are enough. Add the steps later.</span></span>
+          <span className="chev"><Icon name="chevR" size={20} /></span>
         </button>
       </div>
     </>
@@ -169,15 +171,15 @@ export function Editor({ id, draft, note }) {
 
   return (
     <>
-      <div className="topbar">
+      <div className="topbar compact">
         <button className="icon-btn" onClick={back} aria-label="Cancel"><Icon name="x" /></button>
-        <h1 className="serif" style={{ fontSize: 24 }}>{existing ? 'Edit recipe' : 'New recipe'}</h1>
-        <button className="btn primary sm" onClick={save} disabled={saving}>{saving ? <span className="spin" /> : 'Save'}</button>
+        <h1 className="serif">{existing ? 'Edit recipe' : 'New recipe'}</h1>
+        <button className="btn primary sm" style={{ minWidth: 72 }} onClick={save} disabled={saving}>{saving ? <span className="spin" /> : 'Save'}</button>
       </div>
-      <div className="screen no-nav stack">
+      <div className="screen no-nav stack" style={{ paddingTop: 16 }}>
         {note && <div className="banner ok">{note}</div>}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <Photo src={preview} fit={f.photoData ? 'contain' : 'cover'} style={{ aspectRatio: '4/3' }} />
+          <Photo src={preview} fit={f.photoData ? 'contain' : 'cover'} style={{ aspectRatio: preview ? '4/3' : '3/1' }} />
           <div className="row" style={{ padding: 10, flexWrap: 'wrap' }}>
             <button className="btn sm" onClick={() => fileRef.current.click()}><Icon name="camera" size={16} /> {preview ? 'Change photo' : 'Add photo'}</button>
             <button className="btn sm ghost" onClick={() => {
@@ -199,7 +201,7 @@ export function Editor({ id, draft, note }) {
           <label className="field"><span>Cook time</span><input className="input" value={f.cook_time} onChange={set('cook_time')} placeholder="30 min" /></label>
         </div>
 
-        <label className="field"><span>Ingredients · one per line</span>
+        <label className="field"><span>Ingredients <em>one per line</em></span>
           <textarea className="textarea" style={{ minHeight: 170 }} value={f.ingredients} onChange={set('ingredients')} placeholder={'300 g orzo\n1 ui\n2 tenen knoflook'} />
         </label>
         {meat.length > 0 && (
@@ -207,11 +209,11 @@ export function Editor({ id, draft, note }) {
             <b>Not vegetarian yet:</b> {meat.join(', ')}. Swap it for a vegetarian alternative (e.g. vegetarische kipstukjes, Vivera schnitzels, vegetarische garnalen) and keep the swap visible in the ingredient.
           </div>
         )}
-        <label className="field"><span>Steps · blank line between steps</span>
+        <label className="field"><span>Method <em>leave a blank line between steps</em></span>
           <textarea className="textarea" style={{ minHeight: 200 }} value={f.steps} onChange={set('steps')} placeholder={'Snipper de ui en knoflook.\n\nKook de orzo…'} />
         </label>
-        <label className="field"><span>Source link</span><input className="input" inputMode="url" value={f.source_url} onChange={set('source_url')} placeholder="https://" /></label>
-        <label className="field"><span>Notes</span><textarea className="textarea" style={{ minHeight: 80 }} value={f.notes} onChange={set('notes')} /></label>
+        <label className="field"><span>Original recipe link <em>optional</em></span><input className="input" inputMode="url" value={f.source_url} onChange={set('source_url')} placeholder="https://" /></label>
+        <label className="field"><span>Notes <em>optional</em></span><textarea className="textarea" style={{ minHeight: 80 }} value={f.notes} onChange={set('notes')} /></label>
         <button className="btn primary block" onClick={save} disabled={saving}>{existing ? 'Save changes' : 'Add recipe'}</button>
       </div>
     </>
@@ -303,14 +305,14 @@ export function Settings() {
 
   return (
     <>
-      <div className="topbar">
+      <div className="topbar compact">
         <button className="icon-btn" onClick={back} aria-label="Back"><Icon name="back" /></button>
         <h1 className="serif">Settings</h1>
       </div>
-      <div className="screen no-nav stack">
+      <div className="screen no-nav stack" style={{ paddingTop: 16 }}>
         <div className="card stack">
           <div className="row">
-            <span className="ic"><Icon name="cloud" /></span>
+            <span className="icon-btn on" style={{ borderColor: 'transparent' }}><Icon name="cloud" /></span>
             <div style={{ flex: 1 }}>
               <b>{db.kind === 'firebase' ? 'Synced' : 'This phone only'}</b>
               <div className="small muted">{db.kind === 'firebase' ? `${user.email} · ${db.projectId}` : 'Recipes are not shared yet'}</div>
@@ -322,7 +324,7 @@ export function Settings() {
           {db.kind === 'firebase' && <button className="btn block" onClick={() => db.signOut()}><Icon name="out" size={18} /> Sign out</button>}
         </div>
 
-        <h2 className="serif section-h" style={{ marginTop: 10 }}>Bring recipes in</h2>
+        <div className="section-label">Bring recipes in</div>
         {hasLocal && <button className="option" onClick={moveLocal} disabled={!!busy}>
           <span className="ic">{busy === 'local' ? <span className="spin" /> : <Icon name="cloud" />}</span>
           <span><b>Move recipes from “this phone only”</b><span className="small muted">Recipes you added before connecting Firebase.</span></span>

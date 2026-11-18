@@ -31,6 +31,8 @@ const P = {
   dots: 'M12 6h.01M12 12h.01M12 18h.01',
   out: 'M15 4h4v16h-4M10 16l4-4-4-4M14 12H4',
   cloud: 'M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z',
+  moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  pot: 'M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM2 10h20M9 6.5c0-1 1-1.5 1-2.5M14 6.5c0-1 1-1.5 1-2.5',
 };
 
 export function Icon({ name, size = 22, fill = false, stroke = 2 }) {
@@ -46,19 +48,19 @@ export function Logo({ size = 36 }) {
   // DataIsCool glasses with a bar chart + gold trend line
   return (
     <svg className="logo" width={size} height={size} viewBox="0 0 48 48" aria-label="DataIsCool">
-      <rect x="2" y="2" width="44" height="44" rx="12" fill="#13241b" stroke="#24402f" />
-      <g fill="none" stroke="#7bc87a" strokeWidth="2.4">
+      <rect x="2" y="2" width="44" height="44" rx="12" fill="#27382f" stroke="#435a4c" />
+      <g fill="none" stroke="#8ed18b" strokeWidth="2.4">
         <rect x="7" y="17" width="14" height="12" rx="4" />
         <rect x="27" y="17" width="14" height="12" rx="4" />
         <path d="M21 21.5c1.8-1.4 4.2-1.4 6 0" />
       </g>
-      <g fill="#7bc87a">
+      <g fill="#8ed18b">
         <rect x="10" y="23" width="2.4" height="4" rx="1" />
         <rect x="13.6" y="21" width="2.4" height="6" rx="1" />
         <rect x="30" y="22" width="2.4" height="5" rx="1" />
         <rect x="33.6" y="20" width="2.4" height="7" rx="1" />
       </g>
-      <path d="M9 34l8-3 7 2 8-5 8-3" fill="none" stroke="#e6b450" strokeWidth="2" strokeLinecap="round" />
+      <path d="M9 34l8-3 7 2 8-5 8-3" fill="none" stroke="#f0c05a" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -68,8 +70,8 @@ export function Forest() {
     <>
       <div className="glow" />
       <svg className="forest" viewBox="0 0 1440 220" preserveAspectRatio="none" aria-hidden="true">
-        <path fill="#10241a" opacity=".6" d="M0 220V150l60-30 30 15 40-50 30 25 40-60 30 35 40-45 30 30 40-55 30 35 40-40 30 30 40 30 30-30 40 40 40-55 30 30 40-50 40 35 40-60 30 40 40-30 30 30 40-50 40 40 40-35 30 30 40-60 40 45 40-40 30 25 40-30 40 40 40-55 30 35 40-25 40 30 40-45 30 30v120z" />
-        <path fill="#0a1912" d="M0 220v-40l20-15 20 15 15-30 15 20 15-35 15 25 15-30 15 20 20-25 20 30 20-20 20 30 25-35 20 25 20-15 25 30 20-40 20 30 25-25 20 20 25-35 20 30 20-15 25 25 20-30 20 25 25-35 20 30 25-20 20 25 25-30 25 30 20-25 25 30 20-35 20 30 25-20 25 25 20-35 25 30 20-15 25 25 20-30 20 25 25-35 20 30 25-20 20 25 25-30 20 25 25-35 20 30v60z" />
+        <path fill="#25362d" opacity=".7" d="M0 220V150l60-30 30 15 40-50 30 25 40-60 30 35 40-45 30 30 40-55 30 35 40-40 30 30 40 30 30-30 40 40 40-55 30 30 40-50 40 35 40-60 30 40 40-30 30 30 40-50 40 40 40-35 30 30 40-60 40 45 40-40 30 25 40-30 40 40 40-55 30 35 40-25 40 30 40-45 30 30v120z" />
+        <path fill="#18241e" d="M0 220v-40l20-15 20 15 15-30 15 20 15-35 15 25 15-30 15 20 20-25 20 30 20-20 20 30 25-35 20 25 20-15 25 30 20-40 20 30 25-25 20 20 25-35 20 30 20-15 25 25 20-30 20 25 25-35 20 30 25-20 20 25 25-30 25 30 20-25 25 30 20-35 20 30 25-20 25 25 20-35 25 30 20-15 25 25 20-30 20 25 25-35 20 30 25-20 20 25 25-30 20 25 25-35 20 30v60z" />
       </svg>
     </>
   );
@@ -103,9 +105,14 @@ export const cacheImage = (key, data) => imgCache.set(key, data);
 export function Sheet({ title, onClose, children }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="grab" />
-        {title && <h2 className="serif">{title}</h2>}
+        {title && (
+          <div className="sheet-h">
+            <h2 className="serif">{title}</h2>
+            <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="x" size={20} /></button>
+          </div>
+        )}
         {children}
       </div>
     </div>

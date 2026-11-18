@@ -135,7 +135,7 @@ function Main({ db, user }) {
           <NavBtn on={tab === 'library'} icon="book" label="Recipes" onClick={() => setTab('library')} />
           <NavBtn on={tab === 'plan'} icon="cal" label="Planner" onClick={() => setTab('plan')} />
           <button className="add-btn" onClick={() => go({ name: 'add' })} aria-label="Add recipe">
-            <span className="plus"><Icon name="plus" size={24} stroke={2.6} /></span>
+            <span className="pill-ic"><Icon name="plus" size={24} stroke={2.6} /></span>Add
           </button>
           <NavBtn on={tab === 'shop'} icon="cart" label="Shopping" onClick={() => setTab('shop')} />
           <NavBtn on={false} icon="gear" label="Settings" onClick={() => go({ name: 'settings' })} />
@@ -147,5 +147,9 @@ function Main({ db, user }) {
 }
 
 function NavBtn({ on, icon, label, onClick }) {
-  return <button className={on ? 'on' : ''} onClick={onClick}><Icon name={icon} size={22} />{label}</button>;
+  return (
+    <button className={on ? 'on' : ''} onClick={onClick} aria-current={on ? 'page' : undefined}>
+      <span className="pill-ic"><Icon name={icon} size={22} /></span>{label}
+    </button>
+  );
 }
