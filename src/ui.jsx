@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getBackend } from './lib/db.js';
+import { t } from './lib/i18n.js';
 
 const P = {
   book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5zm0 16a2 2 0 0 1 2-2h13',
@@ -127,7 +128,7 @@ export function Sheet({ title, onClose, children }) {
         {title && (
           <div className="sheet-h">
             <h2 className="serif">{title}</h2>
-            <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="x" size={20} /></button>
+            <button className="icon-btn" onClick={onClose} aria-label={t('Close')}><Icon name="x" size={20} /></button>
           </div>
         )}
         {children}
@@ -140,7 +141,7 @@ export function Stars({ value = 0, onChange, size = 22 }) {
   return (
     <div className="stars">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} className={n <= value ? 'on' : ''} onClick={() => onChange?.(n === value ? 0 : n)} aria-label={`${n} stars`}>
+        <button key={n} className={n <= value ? 'on' : ''} onClick={() => onChange?.(n === value ? 0 : n)} aria-label={t('{n} stars', { n })}>
           <Icon name="star" size={size} fill stroke={1} />
         </button>
       ))}
@@ -158,23 +159,23 @@ const MACROS = [['kcal', 'Calories', ''], ['protein', 'Protein', 'g'], ['carbs',
 /** Compact one-liner, e.g. "620 kcal  38 g protein" */
 export function MacroLine({ m, className = 'macro-line' }) {
   if (!m) return null;
-  return <span className={className}><b>{m.kcal}</b> kcal <span className="sep" /> <b>{m.protein} g</b> protein</span>;
+  return <span className={className}><b>{m.kcal}</b> kcal <span className="sep" /> <b>{m.protein} g</b> {t('protein')}</span>;
 }
 
 /** Four bars against a per-meal target. Protein bar is good when full; fat/kcal turn warm when over. */
-export function MacroBars({ m, t }) {
+export function MacroBars({ m, t: tg }) {
   return (
     <div className="macro-bars">
       {MACROS.map(([k, label, unit]) => {
-        const v = m?.[k] ?? 0, goal = t?.[k] || 0;
+        const v = m?.[k] ?? 0, goal = tg?.[k] || 0;
         const pct = goal ? Math.min(100, (v / goal) * 100) : 0;
         const over = goal && v > goal * 1.15 && k !== 'protein';
         const good = k === 'protein' ? v >= goal * 0.9 : goal && Math.abs(v - goal) <= goal * 0.15;
         return (
           <div key={k} className="mb">
-            <div className="mb-top"><span>{label}</span><b>{v}{unit && ` ${unit}`}</b></div>
+            <div className="mb-top"><span>{t(label)}</span><b>{v}{unit && ` ${unit}`}</b></div>
             <div className="mb-bar"><div className={over ? 'over' : good ? 'good' : ''} style={{ width: `${pct}%` }} /></div>
-            {goal > 0 && <div className="mb-goal">of {goal}{unit && ` ${unit}`}</div>}
+            {goal > 0 && <div className="mb-goal">{t('of {n}', { n: `${goal}${unit ? ` ${unit}` : ''}` })}</div>}
           </div>
         );
       })}

@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { t } from './i18n.js';
 
 export const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert', 'Other'];
 
@@ -15,12 +16,12 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 export function dayLabel(d) {
   d = toDate(d);
   const diff = Math.round((new Date(d) - today()) / 864e5);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  if (diff === -1) return 'Yesterday';
-  return DAY[new Date(d).getDay()];
+  if (diff === 0) return t('Today');
+  if (diff === 1) return t('Tomorrow');
+  if (diff === -1) return t('Yesterday');
+  return t(DAY[d.getDay()]);
 }
-export const dateShort = (d) => `${toDate(d).getDate()} ${MON[toDate(d).getMonth()]}`;
+export const dateShort = (d) => `${toDate(d).getDate()} ${t(MON[toDate(d).getMonth()])}`;
 
 // ── Fetch a web page (native HTTP in the app avoids CORS) ───────────────────
 export async function fetchPage(url) {
@@ -36,11 +37,11 @@ export async function fetchPage(url) {
       connectTimeout: 15000,
       readTimeout: 20000,
     });
-    if (res.status >= 400) throw new Error(`The site answered ${res.status}`);
+    if (res.status >= 400) throw new Error(t('The site answered {n}', { n: res.status }));
     return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
   }
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`The site answered ${res.status}`);
+  if (!res.ok) throw new Error(t('The site answered {n}', { n: res.status }));
   return res.text();
 }
 
@@ -60,7 +61,7 @@ export function compressImage(file, max = 1000, quality = 0.72) {
       URL.revokeObjectURL(url);
       resolve(c.toDataURL('image/jpeg', quality));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read that image')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('Could not read that image'))); };
     img.src = url;
   });
 }

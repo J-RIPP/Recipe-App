@@ -21,11 +21,18 @@ Shared vegetarian recipe app for two phones. An Android APK, plus the same app o
 | Photos | Compressed in-app (~100 KB) and stored in Firestore | No separate storage service or API key |
 | Build | GitHub Actions → Releases | Every push builds a signed APK |
 
+## For the two of you
+
+- **Dutch or English**: picked on first launch (follows the phone language), changeable in Settings.
+- **First launch** shows a short tour: adding recipes, planning the week, the shopping list, cook mode. Replay it from Settings › How the app works.
+- **Invite the second phone**: Settings › Invite someone sends a message with the download link and an invite code. On the other phone: open the app › Join our cookbook › paste the code › I'm new › create an account. Then add that email to `firestore.rules` (step 4 below) and publish.
+- **Undo** after deleting a recipe, removing something from the planner or clearing shopping items.
+
 ## Firebase setup (once)
 
 1. [console.firebase.google.com](https://console.firebase.google.com) → **Add project** (Analytics can be off).
 2. **Build › Firestore Database › Create database** → location `europe-west4` (or `eur3`) → production mode.
-3. **Build › Authentication › Get started › Email/Password** → enable. Then **Users › Add user** for each of you.
+3. **Build › Authentication › Get started › Email/Password** → enable. Accounts can be created in the app ("I'm new"); the rules below decide who gets in.
 4. **Firestore › Rules** → paste `firestore.rules`, put your two emails in, **Publish**.
 5. **Project settings › Your apps › Web (`</>`)** → register → copy the `firebaseConfig` block.
 6. Open the app → paste the config → sign in. Or paste it into `src/firebase-config.js` and push, so the APK has it built in.

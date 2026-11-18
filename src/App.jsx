@@ -6,6 +6,8 @@ import { Forest, Icon, Intro, cacheImage } from './ui.jsx';
 import { Home, Library, RecipeView, Cook, Planner, Shopping } from './screens.jsx';
 import { AddScreen, Editor, Settings, Setup, Login } from './forms.jsx';
 import { WeekPlan } from './weekplan.jsx';
+import { Welcome, NoAccess } from './welcome.jsx';
+import { t } from './lib/i18n.js';
 import { DEFAULT_TARGETS } from './lib/planner.js';
 
 const Ctx = createContext(null);
@@ -39,12 +41,14 @@ function Main({ db, user }) {
   const s = useCollection(db, 'shopping');
   const st = useCollection(db, 'settings');
   const [stack, setStack] = useState([{ name: 'tabs', tab: 'home' }]);
+  const [welcomed, setWelcomed] = useState(() => !!localStorage.getItem('or.welcomed'));
   const [toastMsg, setToastMsg] = useState('');
   const toastTimer = useRef();
 
-  const toast = useCallback((m) => {
-    setToastMsg(m); clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastMsg(''), 2600);
+  // toast('Saved') or toast('Removed', { label: 'Undo', run: () => ... })
+  const toast = useCallback((m, action) => {
+    setToastMsg({ text: m, action }); clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMsg(''), action ? 5000 : 2600);
   }, []);
   const go = useCallback((screen) => setStack((st) => [...st, screen]), []);
   const back = useCallback(() => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st)), []);
@@ -93,18 +97,26 @@ function Main({ db, user }) {
       return id;
     },
     update: (id, patch) => db.set('recipes', id, { ...patch, updated_at: Date.now() }, true),
+    // Photo is kept so Undo can bring the recipe back complete
     deleteRecipe(rec) {
-      db.remove('recipes', rec.id);
-      if (rec.photo?.startsWith('img:')) db.remove('images', rec.photo.slice(4));
-      Object.entries(plan).forEach(([date, ids]) => {
-        if (ids.includes(rec.id)) db.set('plan', date, { recipes: ids.filter((x) => x !== rec.id) }, true);
-      });
+      const { id, ...data } = rec;
+      const planned = Object.entries(plan).filter(([, ids]) => ids.includes(id));
+      db.remove('recipes', id);
+      planned.forEach(([date, ids]) => db.set('plan', date, { recipes: ids.filter((x) => x !== id) }, true));
+      return () => {
+        db.set('recipes', id, data, false);
+        planned.forEach(([date, ids]) => db.set('plan', date, { recipes: ids }, true));
+      };
     },
     planAdd(date, id) {
       const cur = plan[date] || [];
       if (!cur.includes(id)) db.set('plan', date, { recipes: [...cur, id] }, true);
     },
-    planRemove(date, id) { db.set('plan', date, { recipes: (plan[date] || []).filter((x) => x !== id) }, true); },
+    planRemove(date, id) {
+      const before = plan[date] || [];
+      db.set('plan', date, { recipes: before.filter((x) => x !== id) }, true);
+      return () => db.set('plan', date, { recipes: before }, true);
+    },
     shopToggle(key, on) {
       if (on) db.set('shopping', key, { tick: true, at: Date.now() }, true);
       else db.remove('shopping', key);
@@ -114,6 +126,7 @@ function Main({ db, user }) {
     },
     shopSet: (id, data) => db.set('shopping', id, data, true),
     shopRemove: (id) => db.remove('shopping', id),
+    shopRestore: (items) => items.forEach(({ id, ...d }) => db.set('shopping', id, d, false)),
     saveTargets: (t) => db.set('settings', 'macros', t, false),
     planMany(picks) {
       Object.entries(picks).forEach(([date, id]) => {
@@ -127,6 +140,10 @@ function Main({ db, user }) {
     db, user, recipes, byId, plan, shopping: s.items || [], targets, personIdx: Math.min(personIdx, targets.people.length - 1), setPersonIdx, loading: r.items === null,
     offline: r.offline, error: r.error, go, back, replace, toast, ...actions,
   };
+
+  if (r.error?.code === 'permission-denied') return <NoAccess db={db} user={user} />;
+  const replayWelcome = () => setWelcomed(false);
+  ctx.replayWelcome = replayWelcome;
 
   const top = stack[stack.length - 1];
   const tab = stack[0].tab;
@@ -149,17 +166,23 @@ function Main({ db, user }) {
       <div className="app">{screen}</div>
       {showNav && (
         <nav className="nav"><div className="nav-inner">
-          <NavBtn on={tab === 'home'} icon="home" label="Home" onClick={() => setTab('home')} />
-          <NavBtn on={tab === 'library'} icon="book" label="Recipes" onClick={() => setTab('library')} />
-          <button className="add-btn" onClick={() => go({ name: 'add' })} aria-label="Add recipe">
+          <NavBtn on={tab === 'home'} icon="home" label={t('Home')} onClick={() => setTab('home')} />
+          <NavBtn on={tab === 'library'} icon="book" label={t('Recipes')} onClick={() => setTab('library')} />
+          <button className="add-btn" onClick={() => go({ name: 'add' })} aria-label={t('Add recipe')}>
             <span className="pill-ic"><Icon name="plus" size={26} stroke={2.6} /></span>
           </button>
-          <NavBtn on={tab === 'plan'} icon="cal" label="Planner" onClick={() => setTab('plan')} />
-          <NavBtn on={tab === 'shop'} icon="cart" label="Shopping" onClick={() => setTab('shop')} />
+          <NavBtn on={tab === 'plan'} icon="cal" label={t('Planner')} onClick={() => setTab('plan')} />
+          <NavBtn on={tab === 'shop'} icon="cart" label={t('Shopping')} onClick={() => setTab('shop')} />
         </div></nav>
       )}
       <Intro />
-      {toastMsg && <div className="toast" style={showNav ? null : { bottom: 24 }}>{toastMsg}</div>}
+      {toastMsg && (
+        <div className="toast" role="status" style={showNav ? null : { bottom: 24 }}>
+          {toastMsg.text}
+          {toastMsg.action && <button className="toast-action" onClick={() => { toastMsg.action.run(); setToastMsg(''); }}>{toastMsg.action.label}</button>}
+        </div>
+      )}
+      {!welcomed && <Welcome onDone={() => { localStorage.setItem('or.welcomed', '1'); setWelcomed(true); }} />}
     </Ctx.Provider>
   );
 }

@@ -2,7 +2,8 @@
 // Hard rule: the same recipe needs at least `gap` free days between two plannings (also against what's
 // already in the planner). Soft preferences: variety, ratings/favourites and how well the macros fit.
 import { macrosOf } from './nutrition.js';
-import { ymd, addDays } from './util.js';
+import { ymd, addDays, dayLabel, dateShort } from './util.js';
+import { t } from './i18n.js';
 
 export const DEFAULT_TARGETS = {
   people: [{ name: 'Me', kcal: 2000, protein: 100, carbs: 250, fat: 65 }],
@@ -50,7 +51,7 @@ export function generatePlan({ recipes, plan = {}, dates, gap = 1, categories = 
   const rand = rng(seed);
   let pool = recipes.filter((r) => (!categories.length || categories.includes(r.category)) && !avoid.includes(r.id));
   const notes = [];
-  if (!pool.length) { pool = recipes; if (recipes.length) notes.push('No recipes in the chosen categories, so all recipes were used.'); }
+  if (!pool.length) { pool = recipes; if (recipes.length) notes.push(t('No recipes in the chosen categories, so all recipes were used.')); }
 
   const picks = { ...fixed };
   // Everything already planned (outside the dates we're filling) counts for spacing and variety
@@ -88,7 +89,7 @@ export function generatePlan({ recipes, plan = {}, dates, gap = 1, categories = 
       s += rand() * w.jitter;
       scored.push([s, r.id]);
     }
-    if (!scored.length) { notes.push(`No recipe fits on ${date} without repeating too soon.`); continue; }
+    if (!scored.length) { notes.push(t('No recipe fits on {day} without repeating too soon.', { day: `${dayLabel(date).toLowerCase()} ${dateShort(date)}` })); continue; }
     scored.sort((a, b) => b[0] - a[0]);
     picks[date] = scored[0][1];
   }

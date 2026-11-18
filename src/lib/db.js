@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import {
   initializeAuth, indexedDBLocalPersistence, browserLocalPersistence,
-  signInWithEmailAndPassword, signOut, onAuthStateChanged,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged,
 } from 'firebase/auth';
 import { BAKED_CONFIG } from '../firebase-config.js';
 
@@ -35,6 +35,22 @@ export function parseConfigSnippet(text) {
   return cfg.apiKey && cfg.projectId && cfg.appId ? cfg : null;
 }
 
+/** Invite code: the Firebase web config packed into one copyable line ("OR1." + base64url). */
+export function makeInvite(cfg, from = '') {
+  const { apiKey, authDomain, projectId, appId, storageBucket, messagingSenderId } = cfg;
+  const json = JSON.stringify({ apiKey, authDomain, projectId, appId, storageBucket, messagingSenderId, from });
+  return 'OR1.' + btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+export function readInvite(text) {
+  const m = String(text || '').match(/OR1\.([A-Za-z0-9_-]+)/);
+  if (!m) return parseConfigSnippet(String(text || ''));
+  try {
+    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const cfg = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    return cfg.apiKey && cfg.projectId && cfg.appId ? cfg : null;
+  } catch { return null; }
+}
+
 export const newId = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
@@ -52,6 +68,8 @@ function firebaseBackend(cfg) {
     projectId: cfg.projectId,
     onAuth: (cb) => onAuthStateChanged(auth, (u) => cb(u ? { email: u.email, uid: u.uid } : null)),
     signIn: (email, pw) => signInWithEmailAndPassword(auth, email.trim(), pw),
+    signUp: (email, pw) => createUserWithEmailAndPassword(auth, email.trim(), pw),
+    resetPassword: (email) => sendPasswordResetEmail(auth, email.trim()),
     signOut: () => signOut(auth),
     subscribe(col, cb, onErr) {
       return onSnapshot(collection(fs, col), { includeMetadataChanges: false }, (snap) => {
