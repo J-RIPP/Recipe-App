@@ -4,4 +4,5 @@
     <string name="title_activity_main">Our Recipes</string>
     <string name="package_name">com.dataiscool.recipes</string>
     <string name="custom_url_scheme">com.dataiscool.recipes</string>
+    <string name="share_label">Add to Our Recipes</string>
 </resources>
