@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only the people listed here can read or write. Use the exact emails of the
+    // accounts you add under Authentication > Users.
+    function isUs() {
+      return request.auth != null
+        && request.auth.token.email in ['you@example.com', 'her@example.com'];
+    }
+    match /{document=**} {
+      allow read, write: if isUs();
+    }
+  }
+}

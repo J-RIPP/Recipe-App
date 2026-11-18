@@ -1,0 +1,66 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, v2]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Install and test
+        run: |
+          npm ci
+          npm test
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync into Android project
+        run: npx cap sync android
+
+      - name: Build signed APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk ../OurRecipes.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OurRecipes-apk
+          path: OurRecipes.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v2.0.${BUILD_NUMBER}"
+          gh release create "$TAG" OurRecipes.apk \
+            --target "${GITHUB_SHA}" \
+            --title "Our Recipes ${TAG}" \
+            --notes "Download **OurRecipes.apk** on your phone and open it to install or update. Built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}." \
+            --latest

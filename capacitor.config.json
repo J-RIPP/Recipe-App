@@ -1,0 +1,13 @@
+{
+  "appId": "com.dataiscool.recipes",
+  "appName": "Our Recipes",
+  "webDir": "dist",
+  "backgroundColor": "#0d1a14",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "force",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "Keyboard": { "resize": "native" }
+  }
+}
