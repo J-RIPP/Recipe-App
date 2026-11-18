@@ -7,6 +7,8 @@ import { Home, Library, RecipeView, Cook, Planner, Shopping } from './screens.js
 import { AddScreen, Editor, Settings, Setup, Login } from './forms.jsx';
 import { WeekPlan } from './weekplan.jsx';
 import { Welcome, NoAccess } from './welcome.jsx';
+import { Inbox } from './importer.jsx';
+import { pullShared, onShared } from './lib/inbox.js';
 import { t } from './lib/i18n.js';
 import { DEFAULT_TARGETS } from './lib/planner.js';
 
@@ -68,6 +70,18 @@ function Main({ db, user }) {
     });
     return () => { h.then((x) => x.remove()); };
   }, [back]);
+
+  // Things shared from other apps: collect them and open the import list
+  useEffect(() => {
+    const grab = async () => {
+      const n = await pullShared();
+      if (n > 0) setStack((st) => (st[st.length - 1].name === 'inbox' ? st : [...st, { name: 'inbox' }]));
+    };
+    grab();
+    const off = onShared(grab);
+    const resume = Capacitor.isNativePlatform() ? CapApp.addListener('resume', grab) : null;
+    return () => { off(); resume?.then((x) => x.remove()); };
+  }, []);
 
   const recipes = useMemo(() => [...(r.items || [])].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [r.items]);
   const byId = useMemo(() => Object.fromEntries(recipes.map((x) => [x.id, x])), [recipes]);
@@ -155,6 +169,7 @@ function Main({ db, user }) {
     case 'add': screen = <AddScreen />; break;
     case 'settings': screen = <Settings />; break;
     case 'weekplan': screen = <WeekPlan />; break;
+    case 'inbox': screen = <Inbox />; break;
     default:
       screen = tab === 'plan' ? <Planner /> : tab === 'shop' ? <Shopping /> : tab === 'library' ? <Library /> : <Home setTab={setTab} />;
   }

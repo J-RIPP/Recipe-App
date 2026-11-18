@@ -9,6 +9,8 @@ import { estimateMacros } from './lib/nutrition.js';
 import { DEFAULT_TARGETS } from './lib/planner.js';
 import { parseConfigSnippet, saveConfig, clearConfig, setMode, isBaked, getMode, newId, getConfig, makeInvite, readInvite } from './lib/db.js';
 import { Share } from '@capacitor/share';
+import { addToInbox, removeItem as removeInboxItem } from './lib/inbox.js';
+import { HowToShare } from './importer.jsx';
 import { t, getLang, setLang } from './lib/i18n.js';
 
 const SOCIAL = /instagram\.com|tiktok\.com|facebook\.com|fb\.watch|youtube\.com|youtu\.be|pinterest\./i;
@@ -34,10 +36,13 @@ export function AddScreen() {
     const txt = text.trim();
     if (!txt) return;
     const url = extractUrl(txt);
-    const onlyUrl = url && txt.replace(url, '').trim().length < 40;
+    const urls = txt.match(/https?:\/\/[^\s"'<>]+/g) || [];
+    const onlyUrl = url && txt.replace(/https?:\/\/[^\s"'<>]+/g, '').trim().length < 40;
     setMsg(null);
-    if (url && onlyUrl && SOCIAL.test(url)) {
-      setMsg({ kind: 'warn', text: t("Instagram/TikTok don't give the recipe text to other apps. Open the post, copy the caption (tap ⋯ › Copy or long-press the text) and paste it here."), url });
+    // Several links, or an Instagram/TikTok link: read them in the import list
+    if (onlyUrl && (urls.length > 1 || SOCIAL.test(url))) {
+      addToInbox(txt);
+      replace({ name: 'inbox' });
       return;
     }
     if (url && onlyUrl) {
@@ -56,13 +61,12 @@ export function AddScreen() {
     toEditor({ ...r, source_url: url || '' }, t('Check the split between ingredients and steps.'));
   };
 
-  const pickPhoto = async (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    try {
-      const photoData = await compressImage(f, 1600, 0.8);
-      toEditor({ photoData }, t('Type the recipe from the photo. The photo is kept with it.'));
-    } catch (err) { setMsg({ kind: 'warn', text: err.message }); }
+  // Photos picked together are read as one recipe (e.g. three screenshots of one post)
+  const pickPhoto = (e) => {
+    const files = [...(e.target.files || [])];
+    if (!files.length) return;
+    addToInbox([{ kind: 'images', images: files.map((f) => URL.createObjectURL(f)) }]);
+    replace({ name: 'inbox' });
   };
 
   return (
@@ -76,7 +80,7 @@ export function AddScreen() {
           <label className="field">
             <span>{t("Paste a link or recipe text")} <em>{t("from a website, Instagram, TikTok, WhatsApp")}</em></span>
             <textarea className="textarea" style={{ minHeight: 130 }} value={text} onChange={(e) => setText(e.target.value)}
-              placeholder={'https://kookmutsjes.com/…\n\nor the full caption text of a post'} />
+              placeholder={t('One or more links (one per line), or the full text of a recipe')} />
           </label>
           <div className="grid2">
             <button className="btn" onClick={paste}><Icon name="clip" size={18} /> {t("Paste")}</button>
@@ -96,15 +100,16 @@ export function AddScreen() {
 
         <button className="option" onClick={() => fileRef.current.click()}>
           <span className="ic"><Icon name="camera" /></span>
-          <span><b>{t("Photo or screenshot")}</b><span className="small muted">{t("A recipe card, cookbook page or screenshot. You type it in with the photo above.")}</span></span>
+          <span><b>{t("Photos or screenshots")}</b><span className="small muted">{t("The app reads the text. Pick all screenshots of one recipe at once.")}</span></span>
           <span className="chev"><Icon name="chevR" size={20} /></span>
         </button>
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickPhoto} />
+        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={pickPhoto} />
         <button className="option" onClick={() => toEditor({})}>
           <span className="ic"><Icon name="pen" /></span>
           <span><b>{t("Type it in")}</b><span className="small muted">{t("A title and ingredients are enough. Add the steps later.")}</span></span>
           <span className="chev"><Icon name="chevR" size={20} /></span>
         </button>
+        <HowToShare />
       </div>
     </>
   );
@@ -174,8 +179,9 @@ export function Editor({ id, draft, note }) {
         macros: hasMacros ? { kcal: Math.round(+f.kcal), protein: Math.round(+f.protein || 0), carbs: Math.round(+f.carbs || 0), fat: Math.round(+f.fat || 0), source: f.macroSource || 'manual' } : null,
         ...(existing ? {} : { rating: 0, is_favourite: false }),
       });
+      if (draft?.inboxId) removeInboxItem(draft.inboxId);
       toast(existing ? t('Saved') : t('Recipe added'));
-      if (existing) back(); else replace({ name: 'recipe', id: savedId });
+      if (existing || draft?.inboxId) back(); else replace({ name: 'recipe', id: savedId });
     } catch (e) { toast('Could not save: ' + e.message); setSaving(false); }
   };
 

@@ -4,6 +4,7 @@ import { Icon, Photo, Sheet, Stars, Check, MacroBars, MacroLine, introWillPlay }
 import { macrosOf } from './lib/nutrition.js';
 import { mealTarget } from './lib/planner.js';
 import { t } from './lib/i18n.js';
+import { useInbox } from './lib/inbox.js';
 import { stepMinutes, CATEGORIES, ymd, addDays, today, dayLabel, dateShort, shopGroup, SHOP_ORDER, hashKey } from './lib/util.js';
 import { scaleIngredient } from './lib/parse.js';
 
@@ -57,6 +58,7 @@ export function Home({ setTab }) {
   const tm = tonight && macrosOf(tonight);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today(), i));
   const toBuy = shopping.filter((s) => s.manual && !s.ticked).length;
+  const inbox = useInbox();
 
   const rails = useMemo(() => {
     const withM = recipes.map((r) => [r, macrosOf(r)]);
@@ -90,6 +92,13 @@ export function Home({ setTab }) {
             <button className="icon-btn" onClick={() => go({ name: 'settings' })} aria-label={t("Settings")}><Icon name="gear" size={20} /></button>
           </div>
 
+          {inbox.length > 0 && (
+            <button className="inbox-banner" onClick={() => go({ name: 'inbox' })}>
+              <span className="n">{inbox.length}</span>
+              <span style={{ flex: 1 }}><b>{inbox.length === 1 ? t('1 imported recipe to check') : t('{n} imported recipes to check', { n: inbox.length })}</b></span>
+              <Icon name="chevR" size={20} />
+            </button>
+          )}
           {error ? <div className="banner" style={{ marginTop: 16 }}>Can't reach the database ({error.code || error.message}). Check the Firestore rules.</div> : null}
 
           {loading ? <div className="empty"><div className="spin" style={{ margin: '0 auto' }} /></div>
