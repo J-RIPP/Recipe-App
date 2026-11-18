@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
 import { useApp } from './App.jsx';
-import { Icon, Logo, Photo } from './ui.jsx';
+import { Icon, Mark, Photo } from './ui.jsx';
 import { CATEGORIES, fetchPage, extractUrl, compressImage } from './lib/util.js';
 import { parseRecipeHtml, parseRecipeText, normalizeImported, meatWarnings } from './lib/parse.js';
 import { estimateMacros } from './lib/nutrition.js';
@@ -377,7 +377,7 @@ export function Settings() {
             if (confirm('Disconnect this phone from the database? Your recipes stay in Firebase.')) { db.signOut(); clearConfig(); location.reload(); }
           }}>Disconnect database</button>
         )}
-        <p className="small muted center" style={{ marginTop: 18 }}>Our Recipes 2.0 · DataIsCool</p>
+        <p className="small muted center" style={{ marginTop: 18 }}>Our Recipes 2.0</p>
       </div>
     </>
   );
@@ -436,7 +436,7 @@ export function Setup({ onReady }) {
   };
   return (
     <div className="app"><div className="auth stack">
-      <Logo size={56} />
+      <Mark size={64} />
       <h1 className="serif">Our<br />Recipes</h1>
       <p className="muted">Connect your shared database once. After that, both phones see the same recipes, planner and shopping list, also offline.</p>
       <label className="field"><span>Firebase config</span>
@@ -475,7 +475,7 @@ export function Login({ db }) {
   };
   return (
     <div className="app"><form className="auth stack" onSubmit={submit}>
-      <Logo size={56} />
+      <Mark size={64} />
       <h1 className="serif">Our<br />Recipes</h1>
       <p className="muted">Sign in once on this phone. You stay signed in.</p>
       <label className="field"><span>Email</span><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></label>

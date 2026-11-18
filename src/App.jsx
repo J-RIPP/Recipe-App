@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { getBackend, newId } from './lib/db.js';
-import { Forest, Icon, cacheImage } from './ui.jsx';
-import { Library, RecipeView, Cook, Planner, Shopping } from './screens.jsx';
+import { Forest, Icon, Intro, cacheImage } from './ui.jsx';
+import { Home, Library, RecipeView, Cook, Planner, Shopping } from './screens.jsx';
 import { AddScreen, Editor, Settings, Setup, Login } from './forms.jsx';
 import { WeekPlan } from './weekplan.jsx';
 import { DEFAULT_TARGETS } from './lib/planner.js';
@@ -38,7 +38,7 @@ function Main({ db, user }) {
   const p = useCollection(db, 'plan');
   const s = useCollection(db, 'shopping');
   const st = useCollection(db, 'settings');
-  const [stack, setStack] = useState([{ name: 'tabs', tab: 'library' }]);
+  const [stack, setStack] = useState([{ name: 'tabs', tab: 'home' }]);
   const [toastMsg, setToastMsg] = useState('');
   const toastTimer = useRef();
 
@@ -59,7 +59,7 @@ function Main({ db, user }) {
       if (document.querySelector('.overlay')) { document.querySelector('.overlay').click(); return; }
       const st = stackRef.current;
       if (st.length > 1) back();
-      else if (st[0].tab !== 'library') setTab('library');
+      else if (st[0].tab !== 'home') setTab('home');
       else CapApp.minimizeApp();
     });
     return () => { h.then((x) => x.remove()); };
@@ -139,7 +139,7 @@ function Main({ db, user }) {
     case 'settings': screen = <Settings />; break;
     case 'weekplan': screen = <WeekPlan />; break;
     default:
-      screen = tab === 'plan' ? <Planner /> : tab === 'shop' ? <Shopping /> : <Library />;
+      screen = tab === 'plan' ? <Planner /> : tab === 'shop' ? <Shopping /> : tab === 'library' ? <Library /> : <Home setTab={setTab} />;
   }
   const showNav = top.name === 'tabs';
 
@@ -149,15 +149,16 @@ function Main({ db, user }) {
       <div className="app">{screen}</div>
       {showNav && (
         <nav className="nav"><div className="nav-inner">
+          <NavBtn on={tab === 'home'} icon="home" label="Home" onClick={() => setTab('home')} />
           <NavBtn on={tab === 'library'} icon="book" label="Recipes" onClick={() => setTab('library')} />
-          <NavBtn on={tab === 'plan'} icon="cal" label="Planner" onClick={() => setTab('plan')} />
           <button className="add-btn" onClick={() => go({ name: 'add' })} aria-label="Add recipe">
-            <span className="pill-ic"><Icon name="plus" size={24} stroke={2.6} /></span>Add
+            <span className="pill-ic"><Icon name="plus" size={26} stroke={2.6} /></span>
           </button>
+          <NavBtn on={tab === 'plan'} icon="cal" label="Planner" onClick={() => setTab('plan')} />
           <NavBtn on={tab === 'shop'} icon="cart" label="Shopping" onClick={() => setTab('shop')} />
-          <NavBtn on={false} icon="gear" label="Settings" onClick={() => go({ name: 'settings' })} />
         </div></nav>
       )}
+      <Intro />
       {toastMsg && <div className="toast" style={showNav ? null : { bottom: 24 }}>{toastMsg}</div>}
     </Ctx.Provider>
   );

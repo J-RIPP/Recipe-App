@@ -1,4 +1,4 @@
-# Our Recipes 2.0 — DataIsCool
+# Our Recipes
 
 Shared vegetarian recipe app for two phones. An Android APK, plus the same app on the web.
 

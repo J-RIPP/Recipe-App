@@ -32,6 +32,10 @@ const P = {
   out: 'M15 4h4v16h-4M10 16l4-4-4-4M14 12H4',
   cloud: 'M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z',
   shuffle: 'M16 4h4v4M4 20L20 4M20 16v4h-4M15 15l5 5M4 4l5 5',
+  sprig: 'M12 21V9M12 13c-4 0-6-3-6-7 4 0 6 3 6 7zM12 11c4 0 6-3 6-7-4 0-6 3-6 7zM12 17c-3 0-5-2-5-5 3 0 5 2 5 5zM12 16c3 0 5-2 5-5-3 0-5 2-5 5z',
+  dice: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01',
+  home: 'M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z',
+  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   pot: 'M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM2 10h20M9 6.5c0-1 1-1.5 1-2.5M14 6.5c0-1 1-1.5 1-2.5',
 };
@@ -45,36 +49,48 @@ export function Icon({ name, size = 22, fill = false, stroke = 2 }) {
   );
 }
 
-export function Logo({ size = 36 }) {
-  // DataIsCool glasses with a bar chart + gold trend line
+/** Bowl with two sprouting leaves. */
+export function Mark({ size = 44, className = 'logo', animated = false }) {
   return (
-    <svg className="logo" width={size} height={size} viewBox="0 0 48 48" aria-label="DataIsCool">
-      <rect x="2" y="2" width="44" height="44" rx="12" fill="#27382f" stroke="#435a4c" />
-      <g fill="none" stroke="#8ed18b" strokeWidth="2.4">
-        <rect x="7" y="17" width="14" height="12" rx="4" />
-        <rect x="27" y="17" width="14" height="12" rx="4" />
-        <path d="M21 21.5c1.8-1.4 4.2-1.4 6 0" />
+    <svg className={className} width={size} height={size} viewBox="0 0 120 120" aria-hidden="true">
+      {!animated && <rect width="120" height="120" rx="34" fill="#2c4d2a" />}
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path className="steam" d="M50 34c-4-6 4-9 0-15M62 34c-4-6 4-9 0-15" stroke="#b9c9a0" strokeWidth="5" />
+        <path className="bowl" d="M22 62h76c0 20-16 34-38 34S22 82 22 62z" stroke="#fffbf2" strokeWidth="6" fill={animated ? 'none' : '#fffbf2'} />
       </g>
-      <g fill="#8ed18b">
-        <rect x="10" y="23" width="2.4" height="4" rx="1" />
-        <rect x="13.6" y="21" width="2.4" height="6" rx="1" />
-        <rect x="30" y="22" width="2.4" height="5" rx="1" />
-        <rect x="33.6" y="20" width="2.4" height="7" rx="1" />
-      </g>
-      <path d="M9 34l8-3 7 2 8-5 8-3" fill="none" stroke="#f0c05a" strokeWidth="2" strokeLinecap="round" />
+      <path className="leaf l1" d="M60 60c-2-14 6-24 22-26-1 16-9 25-22 26z" fill="#b9c9a0" />
+      <path className="leaf l2" d="M58 60c-12-2-18-10-18-20 12 1 18 9 18 20z" fill="#dd9a2f" />
     </svg>
   );
 }
 
-export function Forest() {
+export function Forest() { return null; }
+
+let introShown = false;
+export const introWillPlay = () => !introShown && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Opening animation: a bowl draws itself, two leaves sprout, the name rises, then the curtain lifts. */
+export function Intro() {
+  const [on, setOn] = useState(() => introWillPlay());
+  useEffect(() => {
+    if (!on) return;
+    introShown = true;
+    const t = setTimeout(() => setOn(false), 2400);
+    return () => clearTimeout(t);
+  }, [on]);
+  if (!on) return null;
+  const word = 'Our Recipes';
   return (
-    <>
-      <div className="glow" />
-      <svg className="forest" viewBox="0 0 1440 220" preserveAspectRatio="none" aria-hidden="true">
-        <path fill="#25362d" opacity=".7" d="M0 220V150l60-30 30 15 40-50 30 25 40-60 30 35 40-45 30 30 40-55 30 35 40-40 30 30 40 30 30-30 40 40 40-55 30 30 40-50 40 35 40-60 30 40 40-30 30 30 40-50 40 40 40-35 30 30 40-60 40 45 40-40 30 25 40-30 40 40 40-55 30 35 40-25 40 30 40-45 30 30v120z" />
-        <path fill="#18241e" d="M0 220v-40l20-15 20 15 15-30 15 20 15-35 15 25 15-30 15 20 20-25 20 30 20-20 20 30 25-35 20 25 20-15 25 30 20-40 20 30 25-25 20 20 25-35 20 30 20-15 25 25 20-30 20 25 25-35 20 30 25-20 20 25 25-30 25 30 20-25 25 30 20-35 20 30 25-20 25 25 20-35 25 30 20-15 25 25 20-30 20 25 25-35 20 30 25-20 20 25 25-30 20 25 25-35 20 30v60z" />
-      </svg>
-    </>
+    <div className="intro" onClick={() => setOn(false)} aria-hidden="true">
+      <div style={{ display: 'grid', justifyItems: 'center' }}>
+        <Mark className="mark" size={132} animated />
+        <div className="word">
+          {word.split('').map((ch, i) => (
+            <span key={i} style={{ animationDelay: `${0.95 + i * 0.04}s` }}>{ch === ' ' ? '\u00a0' : ch}</span>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

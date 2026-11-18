@@ -2,7 +2,7 @@
   "appId": "com.dataiscool.recipes",
   "appName": "Our Recipes",
   "webDir": "dist",
-  "backgroundColor": "#1e2b24",
+  "backgroundColor": "#2c4d2a",
   "android": {
     "adjustMarginsForEdgeToEdge": "force",
     "allowMixedContent": false

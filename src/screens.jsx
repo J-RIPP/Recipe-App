@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from './App.jsx';
-import { Icon, Logo, Photo, Sheet, Stars, Check, MacroBars, MacroLine } from './ui.jsx';
+import { Icon, Photo, Sheet, Stars, Check, MacroBars, MacroLine, introWillPlay } from './ui.jsx';
 import { macrosOf } from './lib/nutrition.js';
 import { mealTarget } from './lib/planner.js';
 import { CATEGORIES, ymd, addDays, today, dayLabel, dateShort, shopGroup, SHOP_ORDER, hashKey } from './lib/util.js';
@@ -10,17 +10,158 @@ const photoOf = (r) => r?.photo || r?.photo_url;
 const timeOf = (r) => r?.cook_time || r?.prep_time || '';
 
 // ── Library ─────────────────────────────────────────────────────────────────
+export function RecipeCard({ r }) {
+  const { go, update } = useApp();
+  const m = macrosOf(r);
+  return (
+    <div className="rcard" role="button" tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && go({ name: 'recipe', id: r.id })}
+      onClick={() => go({ name: 'recipe', id: r.id })}>
+      <Photo src={photoOf(r)} />
+      <button className={`fav ${r.is_favourite ? 'on' : ''}`} aria-label={r.is_favourite ? 'Remove from favourites' : 'Add to favourites'}
+        onClick={(e) => { e.stopPropagation(); update(r.id, { is_favourite: !r.is_favourite }); }}>
+        <Icon name="heart" size={18} fill={r.is_favourite} />
+      </button>
+      <div className="body">
+        <div className="t">{r.title}</div>
+        <div className="m">
+          {timeOf(r) ? <span className="row" style={{ gap: 4 }}><Icon name="clock" size={14} />{timeOf(r)}</span> : <span>{r.category}</span>}
+          {r.rating > 0 && <span className="star">★ {r.rating}</span>}
+        </div>
+        {m && <div className="m" style={{ marginTop: 3 }}><MacroLine m={m} /></div>}
+      </div>
+    </div>
+  );
+}
+
+const minutesOf = (t = '') => {
+  const h = +(t.match(/(\d+)\s*(?:u|uur|h|hr|hour)/i)?.[1] || 0);
+  const m = +(t.match(/(\d+)\s*(?:min|m\b)/i)?.[1] || 0);
+  return h * 60 + m || null;
+};
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
+const LONG_DAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const LONG_MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+let homeSeen = false;
+
+// ── Home ────────────────────────────────────────────────────────────────────
+export function Home({ setTab }) {
+  const { recipes, byId, plan, loading, go, planAdd, shopping, toast, error } = useApp();
+  const [picking, setPicking] = useState(false);
+  const [first] = useState(() => { const f = !homeSeen && introWillPlay(); homeSeen = true; return f; });
+  const now = new Date();
+  const tonightIds = (plan[ymd(today())] || []).filter((id) => byId[id]);
+  const tonight = tonightIds.length ? byId[tonightIds[0]] : null;
+  const tm = tonight && macrosOf(tonight);
+  const week = Array.from({ length: 7 }, (_, i) => addDays(today(), i));
+  const toBuy = shopping.filter((s) => s.manual && !s.ticked).length;
+
+  const rails = useMemo(() => {
+    const withM = recipes.map((r) => [r, macrosOf(r)]);
+    return [
+      ['Favourites', recipes.filter((r) => r.is_favourite)],
+      ['Packed with protein', withM.filter(([, m]) => m && m.protein >= 25).sort((a, b) => b[1].protein - a[1].protein).map(([r]) => r)],
+      ['Ready in 30 minutes', recipes.filter((r) => { const t = minutesOf(r.cook_time) || minutesOf(r.prep_time); return t && t <= 30; })],
+      ['Recently added', recipes.slice(0, 8)],
+    ].filter(([, l]) => l.length);
+  }, [recipes]);
+
+  const surprise = () => {
+    const pool = recipes.filter((r) => !tonightIds.includes(r.id));
+    if (!pool.length) return;
+    const weights = pool.map((r) => 1 + (r.rating || 2) + (r.is_favourite ? 2 : 0));
+    let x = Math.random() * weights.reduce((a, b) => a + b, 0);
+    const pick = pool.find((_, i) => (x -= weights[i]) <= 0) || pool[0];
+    go({ name: 'recipe', id: pick.id });
+    toast('How about this one?');
+  };
+
+  return (
+    <>
+      <div className="screen" style={{ padding: 0 }}>
+        <div className={`reveal ${first ? '' : 'reveal-fast'}`} style={{ padding: `0 20px calc(var(--nav-h) + 32px)` }}>
+          <div className="hello" style={{ padding: '22px 0 0' }}>
+            <div style={{ flex: 1 }}>
+              <div className="date">{LONG_DAY[now.getDay()]} {now.getDate()} {LONG_MON[now.getMonth()]}</div>
+              <h1 className="serif">{greeting()}</h1>
+            </div>
+            <button className="icon-btn" onClick={() => go({ name: 'settings' })} aria-label="Settings"><Icon name="gear" size={20} /></button>
+          </div>
+
+          {error ? <div className="banner" style={{ marginTop: 16 }}>Can't reach the database ({error.code || error.message}). Check the Firestore rules.</div> : null}
+
+          {loading ? <div className="empty"><div className="spin" style={{ margin: '0 auto' }} /></div>
+            : tonight ? (
+              <button className="tonight" onClick={() => go({ name: 'recipe', id: tonight.id })}>
+                <Photo src={photoOf(tonight)} iconSize={48} />
+                <span className="go" aria-hidden="true"><Icon name="chevR" size={24} /></span>
+                <div className="cap">
+                  <span className="when"><Icon name="moon" size={14} /> Tonight</span>
+                  <h2 className="serif">{tonight.title}</h2>
+                  <div className="tmeta">
+                    {timeOf(tonight) && <span><Icon name="clock" size={15} /> {timeOf(tonight)}</span>}
+                    {tm && <span>{tm.kcal} kcal</span>}
+                    {tm && <span>{tm.protein} g protein</span>}
+                    {tonightIds.length > 1 && <span>+{tonightIds.length - 1} more</span>}
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div className="tonight-empty">
+                <svg className="sprig" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21V9M12 13c-4 0-6-3-6-7 4 0 6 3 6 7zM12 11c4 0 6-3 6-7-4 0-6 3-6 7zM12 17c-3 0-5-2-5-5 3 0 5 2 5 5zM12 16c3 0 5-2 5-5-3 0-5 2-5 5z" /></svg>
+                <span className="when" style={{ background: 'var(--saffron-soft)', color: 'var(--text)', fontSize: 13, fontWeight: 700, padding: '4px 11px', borderRadius: 999, display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="moon" size={14} /> Tonight</span>
+                <h2 className="serif">{recipes.length ? 'What are we eating?' : 'Start your cookbook'}</h2>
+                <p>{recipes.length ? 'Nothing planned yet. Pick something and it goes straight into the planner.' : 'Add a recipe from a link, a caption or a photo.'}</p>
+                {recipes.length
+                  ? <button className="btn sm" onClick={() => setPicking(true)}><Icon name="plus" size={16} /> Pick tonight's dinner</button>
+                  : <button className="btn sm" onClick={() => go({ name: 'add' })}><Icon name="plus" size={16} /> Add a recipe</button>}
+              </div>
+            )}
+
+          <div className="quick">
+            <button onClick={() => go({ name: 'weekplan' })}><span className="qi green"><Icon name="shuffle" size={24} /></span>Plan my week</button>
+            <button onClick={surprise} disabled={!recipes.length}><span className="qi gold"><Icon name="dice" size={24} /></span>Surprise me</button>
+            <button onClick={() => setTab('shop')}><span className="qi sage"><Icon name="cart" size={24} />{toBuy > 0 && <span className="badge">{toBuy}</span>}</span>Shopping</button>
+            <button onClick={() => go({ name: 'add' })}><span className="qi berry"><Icon name="plus" size={24} /></span>Add recipe</button>
+          </div>
+
+          <div className="home-sec">
+            <div className="home-sec-h"><h2 className="serif">This week</h2><button onClick={() => setTab('plan')}>Planner</button></div>
+            <div className="week">
+              {week.map((d, i) => {
+                const has = (plan[ymd(d)] || []).some((id) => byId[id]);
+                return (
+                  <button key={i} className={`${i === 0 ? 'today' : ''} ${has ? 'has' : ''}`} onClick={() => setTab('plan')} aria-label={`${LONG_DAY[d.getDay()]}${has ? ', planned' : ''}`}>
+                    <span className="wd">{LONG_DAY[d.getDay()].slice(0, 2)}</span>
+                    <span className="wn">{d.getDate()}</span>
+                    <span className="wdot" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {rails.map(([title, list]) => (
+            <div key={title} className="home-sec">
+              <div className="home-sec-h"><h2 className="serif">{title}</h2><button onClick={() => setTab('library')}>See all</button></div>
+              <div className="rail">{list.slice(0, 10).map((r) => <RecipeCard key={r.id} r={r} />)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {picking && <RecipePicker title="Tonight's dinner" onClose={() => setPicking(false)} onPick={(id) => { planAdd(ymd(today()), id); setPicking(false); }} />}
+    </>
+  );
+}
+
+// ── Library ─────────────────────────────────────────────────────────────────
 export function Library() {
-  const { recipes, byId, plan, loading, go, update, offline, error, planAdd } = useApp();
+  const { recipes, loading, go, offline } = useApp();
   const [q, setQ] = useState(() => sessionStorage.getItem('lib.q') || '');
   const [cat, setCat] = useState(() => sessionStorage.getItem('lib.cat') || 'All');
   const [favOnly, setFavOnly] = useState(false);
   const [sort, setSort] = useState('new');
-  const [picking, setPicking] = useState(false);
   useEffect(() => { sessionStorage.setItem('lib.q', q); sessionStorage.setItem('lib.cat', cat); }, [q, cat]);
-
-  const tonightIds = (plan[ymd(today())] || []).filter((id) => byId[id]);
-  const filtering = q || cat !== 'All' || favOnly;
 
   const list = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -37,53 +178,24 @@ export function Library() {
   return (
     <>
       <div className="topbar">
-        <Logo />
         <div style={{ flex: 1 }}>
-          <h1 className="serif">Our Recipes</h1>
-          <div className="sub">{recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}{offline ? ', offline for now' : ''}</div>
+          <h1 className="serif">Recipes</h1>
+          <div className="sub">{recipes.length} in your cookbook{offline ? ', offline for now' : ''}</div>
         </div>
+        <button className={`icon-btn ${favOnly ? 'on' : ''}`} onClick={() => setFavOnly(!favOnly)} aria-pressed={favOnly} aria-label="Show favourites only">
+          <Icon name="heart" fill={favOnly} size={20} />
+        </button>
       </div>
-      <div className="screen stack">
-        {error && <div className="banner">Can't reach the database ({error.code || error.message}). Check the Firestore rules.</div>}
-
-        {!loading && recipes.length > 0 && !filtering && (
-          tonightIds.length ? (
-            <button className="tonight" onClick={() => go({ name: 'recipe', id: tonightIds[0] })}>
-              <Photo src={photoOf(byId[tonightIds[0]])} iconSize={44} />
-              <div className="cap">
-                <span className="when">Tonight</span>
-                <h2 className="serif">{byId[tonightIds[0]].title}</h2>
-                <div className="more">
-                  {timeOf(byId[tonightIds[0]]) || `${byId[tonightIds[0]].ingredients?.length || 0} ingredients`}
-                  {tonightIds.length > 1 && `, plus ${tonightIds.length - 1} more`}
-                </div>
-              </div>
-            </button>
-          ) : (
-            <button className="tonight-empty" onClick={() => setPicking(true)}>
-              <span className="ic"><Icon name="moon" /></span>
-              <span style={{ flex: 1 }}><b>Nothing planned for tonight</b><span className="small muted">Pick a recipe and it goes into the planner and shopping list.</span></span>
-              <Icon name="chevR" size={20} />
-            </button>
-          )
-        )}
-
-        <div className="row">
-          <div className="search">
-            <Icon name="search" size={18} />
-            <input className="input" type="search" placeholder="Search by name or ingredient" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-          <button className={`icon-btn ${favOnly ? 'on' : ''}`} style={{ width: 48, height: 48 }} onClick={() => setFavOnly(!favOnly)}
-            aria-pressed={favOnly} aria-label="Show favourites only">
-            <Icon name="heart" fill={favOnly} />
-          </button>
+      <div className="screen stack reveal reveal-fast">
+        <div className="search">
+          <Icon name="search" size={18} />
+          <input className="input" type="search" placeholder="Search by name or ingredient" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="chips" role="tablist" aria-label="Category">
           {['All', ...CATEGORIES].map((c) => (
             <button key={c} role="tab" aria-selected={cat === c} className={`chip ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>
           ))}
         </div>
-
         {loading ? <div className="empty"><div className="spin" style={{ margin: '0 auto' }} /></div>
           : !recipes.length ? (
             <div className="empty">
@@ -93,43 +205,22 @@ export function Library() {
               <p className="small" style={{ marginTop: 16 }}>Recipes in the old app? Import them under Settings.</p>
             </div>
           ) : (
-            <>
-              <div className="section-label" style={{ marginTop: 6 }}>
+            <div>
+              <div className="section-label" style={{ marginTop: 4 }}>
                 <span>{favOnly ? 'Favourites' : cat === 'All' ? 'All recipes' : cat}</span>
                 <span className="count">{list.length}</span>
                 <span className="spacer" />
-                <select className="select" style={{ width: 'auto', minHeight: 38, padding: '6px 34px 6px 12px', fontSize: 14, backgroundPosition: 'calc(100% - 18px) 16px, calc(100% - 13px) 16px' }}
+                <select className="select" style={{ width: 'auto', minHeight: 38, padding: '6px 34px 6px 14px', fontSize: 14, borderRadius: 999, backgroundPosition: 'calc(100% - 18px) 16px, calc(100% - 13px) 16px' }}
                   value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
                   <option value="new">Newest first</option><option value="az">A to Z</option><option value="rating">Best rated</option><option value="protein">Most protein</option><option value="light">Fewest calories</option>
                 </select>
               </div>
               {!list.length ? <div className="empty">No recipes match. Try another word or category.</div> : (
-                <div className="cards">
-                  {list.map((r) => (
-                    <div key={r.id} className="rcard" role="button" tabIndex={0}
-                      onKeyDown={(e) => e.key === 'Enter' && go({ name: 'recipe', id: r.id })}
-                      onClick={() => go({ name: 'recipe', id: r.id })}>
-                      <Photo src={photoOf(r)} />
-                      <button className={`fav ${r.is_favourite ? 'on' : ''}`} aria-label={r.is_favourite ? 'Remove from favourites' : 'Add to favourites'}
-                        onClick={(e) => { e.stopPropagation(); update(r.id, { is_favourite: !r.is_favourite }); }}>
-                        <Icon name="heart" size={18} fill={r.is_favourite} />
-                      </button>
-                      <div className="body">
-                        <div className="t">{r.title}</div>
-                        <div className="m">
-                          {timeOf(r) ? <span className="row" style={{ gap: 4 }}><Icon name="clock" size={14} />{timeOf(r)}</span> : <span>{r.category}</span>}
-                          {r.rating > 0 && <span className="star">★ {r.rating}</span>}
-                        </div>
-                        {macrosOf(r) && <div className="m" style={{ marginTop: 3 }}><MacroLine m={macrosOf(r)} /></div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <div className="cards">{list.map((r) => <RecipeCard key={r.id} r={r} />)}</div>
               )}
-            </>
+            </div>
           )}
       </div>
-      {picking && <RecipePicker title="Cook tonight" onClose={() => setPicking(false)} onPick={(id) => { planAdd(ymd(today()), id); setPicking(false); }} />}
     </>
   );
 }
@@ -162,7 +253,7 @@ export function RecipeView({ id }) {
           <button className="icon-btn" onClick={() => setSheet('more')} aria-label="Recipe options"><Icon name="dots" /></button>
         </div>
       </div>
-      <div className="stack" style={{ position: 'relative', zIndex: 2, marginTop: -18 }}>
+      <div className="stack r-sheet">
         <div className="meta">
           <span className="tag">{r.category}</span>
           {r.prep_time && <span className="tag"><Icon name="clock" size={14} /> Prep {r.prep_time}</span>}
@@ -335,7 +426,7 @@ export function Planner() {
         </div>
         <button className="btn sm primary" onClick={() => go({ name: 'weekplan' })}><Icon name="shuffle" size={16} /> Plan my week</button>
       </div>
-      <div className="screen">
+      <div className="screen reveal reveal-fast">
         <button className="btn ghost sm" style={{ paddingLeft: 0 }} onClick={() => setPast(!past)}>{past ? 'Hide last week' : 'Show last week'}</button>
         {days.map((d) => {
           const key = ymd(d);
@@ -458,7 +549,7 @@ export function Shopping() {
           <div className="sub">{total ? `${total - doneCount} left to get` : 'From your planner and your own items'}</div>
         </div>
       </div>
-      <div className="screen stack">
+      <div className="screen stack reveal reveal-fast">
         <div className="seg" role="tablist" aria-label="Plan period">
           {[3, 7, 14].map((n) => (
             <button key={n} role="tab" aria-selected={days === n} className={days === n ? 'on' : ''} onClick={() => setDays(n)}>Next {n} days</button>
