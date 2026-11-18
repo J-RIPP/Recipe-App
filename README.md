@@ -4,7 +4,8 @@ Shared vegetarian recipe app for two phones. An Android APK, plus the same app o
 
 - **Add recipes without JSON**: paste a recipe link (reads the recipe data on the page), paste an Instagram/TikTok caption, snap a photo of a recipe card, or type it in.
 - **Recipes**: search (also by ingredient), categories, favourites, ratings, notes, servings scaler.
-- **Planner**: 14 days ahead (past week on request).
+- **Planner**: 14 days ahead (past week on request). **Plan my week** fills 3, 5 or 7 days automatically: never the same recipe within the chosen gap (default: not two days in a row), prefers variety, ratings and dinners that fit your macro targets. Swap any day or shuffle the lot.
+- **Macros**: per serving, from the recipe website when available, otherwise estimated from the ingredient amounts (built-in table of ~150 common ingredients), or entered by hand. Daily targets per person in Settings; dinner = a share of the day (default 35%).
 - **Shopping list**: built from the planner, grouped by aisle, plus your own items. Ticks sync live.
 - **Cook mode**: one step at a time, screen stays on.
 - **Offline**: everything works without signal and syncs when you're back online.

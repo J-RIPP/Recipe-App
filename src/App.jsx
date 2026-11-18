@@ -5,6 +5,8 @@ import { getBackend, newId } from './lib/db.js';
 import { Forest, Icon, cacheImage } from './ui.jsx';
 import { Library, RecipeView, Cook, Planner, Shopping } from './screens.jsx';
 import { AddScreen, Editor, Settings, Setup, Login } from './forms.jsx';
+import { WeekPlan } from './weekplan.jsx';
+import { DEFAULT_TARGETS } from './lib/planner.js';
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
@@ -35,6 +37,7 @@ function Main({ db, user }) {
   const r = useCollection(db, 'recipes');
   const p = useCollection(db, 'plan');
   const s = useCollection(db, 'shopping');
+  const st = useCollection(db, 'settings');
   const [stack, setStack] = useState([{ name: 'tabs', tab: 'library' }]);
   const [toastMsg, setToastMsg] = useState('');
   const toastTimer = useRef();
@@ -65,6 +68,12 @@ function Main({ db, user }) {
   const recipes = useMemo(() => [...(r.items || [])].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [r.items]);
   const byId = useMemo(() => Object.fromEntries(recipes.map((x) => [x.id, x])), [recipes]);
   const plan = useMemo(() => Object.fromEntries((p.items || []).map((d) => [d.id, d.recipes || []])), [p.items]);
+  const targets = useMemo(() => {
+    const t = (st.items || []).find((x) => x.id === 'macros');
+    return t?.people?.length ? { people: t.people, dinnerShare: t.dinnerShare ?? DEFAULT_TARGETS.dinnerShare } : DEFAULT_TARGETS;
+  }, [st.items]);
+  const [personIdx, setPersonIdx] = useState(() => +(localStorage.getItem('or.person') || 0));
+  useEffect(() => localStorage.setItem('or.person', personIdx), [personIdx]);
 
   const actions = useMemo(() => ({
     async saveRecipe(draft) {
@@ -105,10 +114,17 @@ function Main({ db, user }) {
     },
     shopSet: (id, data) => db.set('shopping', id, data, true),
     shopRemove: (id) => db.remove('shopping', id),
+    saveTargets: (t) => db.set('settings', 'macros', t, false),
+    planMany(picks) {
+      Object.entries(picks).forEach(([date, id]) => {
+        const cur = plan[date] || [];
+        if (!cur.includes(id)) db.set('plan', date, { recipes: [...cur, id] }, true);
+      });
+    },
   }), [db, plan]);
 
   const ctx = {
-    db, user, recipes, byId, plan, shopping: s.items || [], loading: r.items === null,
+    db, user, recipes, byId, plan, shopping: s.items || [], targets, personIdx: Math.min(personIdx, targets.people.length - 1), setPersonIdx, loading: r.items === null,
     offline: r.offline, error: r.error, go, back, replace, toast, ...actions,
   };
 
@@ -121,6 +137,7 @@ function Main({ db, user }) {
     case 'edit': screen = <Editor key={top.key || top.id || 'new'} id={top.id} draft={top.draft} note={top.note} />; break;
     case 'add': screen = <AddScreen />; break;
     case 'settings': screen = <Settings />; break;
+    case 'weekplan': screen = <WeekPlan />; break;
     default:
       screen = tab === 'plan' ? <Planner /> : tab === 'shop' ? <Shopping /> : <Library />;
   }

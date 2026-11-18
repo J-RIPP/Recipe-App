@@ -5,6 +5,8 @@ import { useApp } from './App.jsx';
 import { Icon, Logo, Photo } from './ui.jsx';
 import { CATEGORIES, fetchPage, extractUrl, compressImage } from './lib/util.js';
 import { parseRecipeHtml, parseRecipeText, normalizeImported, meatWarnings } from './lib/parse.js';
+import { estimateMacros } from './lib/nutrition.js';
+import { DEFAULT_TARGETS } from './lib/planner.js';
 import { parseConfigSnippet, saveConfig, clearConfig, setMode, isBaked, getMode, newId } from './lib/db.js';
 
 const SOCIAL = /instagram\.com|tiktok\.com|facebook\.com|fb\.watch|youtube\.com|youtu\.be|pinterest\./i;
@@ -124,6 +126,8 @@ export function Editor({ id, draft, note }) {
     ingredients: (initial.ingredients || []).join('\n'),
     steps: (initial.steps || []).join('\n\n'),
     notes: initial.notes || '',
+    kcal: initial.macros?.kcal ?? '', protein: initial.macros?.protein ?? '', carbs: initial.macros?.carbs ?? '', fat: initial.macros?.fat ?? '',
+    macroSource: initial.macros?.source || '',
   }));
   const [saving, setSaving] = useState(false);
   const fileRef = useRef();
@@ -136,6 +140,9 @@ export function Editor({ id, draft, note }) {
     return (blocks.length > 1 ? blocks : lines(s)).map((x) => x.replace(/^\d{1,2}[.)]\s+/, ''));
   };
   const meat = useMemo(() => meatWarnings(lines(f.ingredients)), [f.ingredients]);
+  const est = useMemo(() => estimateMacros(lines(f.ingredients), +f.servings || 2), [f.ingredients, f.servings]);
+  const setMacro = (k) => (e) => setF({ ...f, [k]: e.target.value, macroSource: 'manual' });
+  const hasMacros = +f.kcal > 0;
   const preview = f.photoData || f.photo || f.photo_url;
 
   const pick = async (e) => {
@@ -162,6 +169,7 @@ export function Editor({ id, draft, note }) {
         ingredients: lines(f.ingredients),
         steps: stepsOf(f.steps),
         notes: f.notes,
+        macros: hasMacros ? { kcal: Math.round(+f.kcal), protein: Math.round(+f.protein || 0), carbs: Math.round(+f.carbs || 0), fat: Math.round(+f.fat || 0), source: f.macroSource || 'manual' } : null,
         ...(existing ? {} : { rating: 0, is_favourite: false }),
       });
       toast(existing ? 'Saved' : 'Recipe added');
@@ -212,6 +220,24 @@ export function Editor({ id, draft, note }) {
         <label className="field"><span>Method <em>leave a blank line between steps</em></span>
           <textarea className="textarea" style={{ minHeight: 200 }} value={f.steps} onChange={set('steps')} placeholder={'Snipper de ui en knoflook.\n\nKook de orzo…'} />
         </label>
+        <div className="field">
+          <span>Macros per serving <em>{hasMacros ? (f.macroSource === 'site' ? 'from the recipe website' : 'entered by you') : 'leave empty to estimate from the ingredients'}</em></span>
+          <div className="grid2" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {[['kcal', 'kcal'], ['protein', 'Protein g'], ['carbs', 'Carbs g'], ['fat', 'Fat g']].map(([k, l]) => (
+              <label key={k} className="field" style={{ minWidth: 0 }}>
+                <input className="input" style={{ padding: '10px 8px', textAlign: 'center' }} type="number" inputMode="numeric" min="0"
+                  value={f[k]} onChange={setMacro(k)} placeholder={est.matched ? String(est[k]) : '–'} aria-label={l} />
+                <span className="small muted center" style={{ display: 'block', marginTop: 4, fontWeight: 500 }}>{l}</span>
+              </label>
+            ))}
+          </div>
+          <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+            <span className="small muted" style={{ flex: 1 }}>
+              {est.matched ? `Estimate: ${est.kcal} kcal, ${est.protein} g protein (from ${est.matched} of ${est.total} ingredients)` : 'Add amounts like "200 g" to the ingredients for an estimate.'}
+            </span>
+            {hasMacros && <button className="btn sm ghost" onClick={() => setF({ ...f, kcal: '', protein: '', carbs: '', fat: '', macroSource: '' })}>Use estimate</button>}
+          </div>
+        </div>
         <label className="field"><span>Original recipe link <em>optional</em></span><input className="input" inputMode="url" value={f.source_url} onChange={set('source_url')} placeholder="https://" /></label>
         <label className="field"><span>Notes <em>optional</em></span><textarea className="textarea" style={{ minHeight: 80 }} value={f.notes} onChange={set('notes')} /></label>
         <button className="btn primary block" onClick={save} disabled={saving}>{existing ? 'Save changes' : 'Add recipe'}</button>
@@ -229,7 +255,7 @@ const OLD_SB = 'https://tkpwseiasagnzerodiwl.supabase.co';
 const OLD_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcHdzZWlhc2Fnbnplcm9kaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzM4OTIsImV4cCI6MjA5NTE0OTg5Mn0.wWN7IXRcEmGiIisR0k9Gc4TkQT6CuLCNF7Qk8_Gl9qQ';
 
 export function Settings() {
-  const { db, user, recipes, back, toast } = useApp();
+  const { db, user, recipes, back, toast, targets } = useApp();
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState(null);
   const fileRef = useRef();
@@ -324,6 +350,8 @@ export function Settings() {
           {db.kind === 'firebase' && <button className="btn block" onClick={() => db.signOut()}><Icon name="out" size={18} /> Sign out</button>}
         </div>
 
+        <TargetsEditor key={JSON.stringify(targets)} />
+
         <div className="section-label">Bring recipes in</div>
         {hasLocal && <button className="option" onClick={moveLocal} disabled={!!busy}>
           <span className="ic">{busy === 'local' ? <span className="spin" /> : <Icon name="cloud" />}</span>
@@ -350,6 +378,47 @@ export function Settings() {
           }}>Disconnect database</button>
         )}
         <p className="small muted center" style={{ marginTop: 18 }}>Our Recipes 2.0 · DataIsCool</p>
+      </div>
+    </>
+  );
+}
+
+function TargetsEditor() {
+  const { targets, saveTargets, toast } = useApp();
+  const [t, setT] = useState(() => JSON.parse(JSON.stringify(targets)));
+  const dirty = JSON.stringify(t) !== JSON.stringify(targets);
+  const setP = (i, k, v) => setT({ ...t, people: t.people.map((p, j) => (j === i ? { ...p, [k]: k === 'name' ? v : Math.max(0, +v || 0) } : p)) });
+  return (
+    <>
+      <div className="section-label">Macro targets</div>
+      <div className="card stack">
+        <p className="small muted">Daily targets per person. The planner aims each dinner at a share of the day.</p>
+        {t.people.map((p, i) => (
+          <div key={i} className="stack" style={{ paddingBottom: 12, borderBottom: '1px solid var(--line-soft)' }}>
+            <div className="row">
+              <input className="input" style={{ fontWeight: 600 }} value={p.name} onChange={(e) => setP(i, 'name', e.target.value)} aria-label="Name" />
+              {t.people.length > 1 && <button className="icon-btn" onClick={() => setT({ ...t, people: t.people.filter((_, j) => j !== i) })} aria-label={`Remove ${p.name}`}><Icon name="trash" size={18} /></button>}
+            </div>
+            <div className="grid2" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {[['kcal', 'kcal'], ['protein', 'Protein g'], ['carbs', 'Carbs g'], ['fat', 'Fat g']].map(([k, l]) => (
+                <label key={k} style={{ minWidth: 0 }}>
+                  <input className="input" style={{ padding: '10px 6px', textAlign: 'center' }} type="number" inputMode="numeric" value={p[k]} onChange={(e) => setP(i, k, e.target.value)} aria-label={`${p.name} ${l}`} />
+                  <span className="small muted center" style={{ display: 'block', marginTop: 4 }}>{l}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        {t.people.length < 4 && <button className="btn sm outline" onClick={() => setT({ ...t, people: [...t.people, { ...DEFAULT_TARGETS.people[0], name: 'Partner' }] })}><Icon name="plus" size={16} /> Add a person</button>}
+        <div className="opt-row">
+          <span>Dinner share of the day<em>{Math.round((t.people[0]?.kcal || 0) * t.dinnerShare / 100)} kcal for {t.people[0]?.name}</em></span>
+          <span className="stepper">
+            <button onClick={() => setT({ ...t, dinnerShare: Math.max(10, t.dinnerShare - 5) })} aria-label="Less">−</button>
+            <b>{t.dinnerShare}%</b>
+            <button onClick={() => setT({ ...t, dinnerShare: Math.min(70, t.dinnerShare + 5) })} aria-label="More">+</button>
+          </span>
+        </div>
+        {dirty && <button className="btn primary block" onClick={() => { saveTargets(t); toast('Targets saved'); }}>Save targets</button>}
       </div>
     </>
   );

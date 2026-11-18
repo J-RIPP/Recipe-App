@@ -31,6 +31,7 @@ const P = {
   dots: 'M12 6h.01M12 12h.01M12 18h.01',
   out: 'M15 4h4v16h-4M10 16l4-4-4-4M14 12H4',
   cloud: 'M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z',
+  shuffle: 'M16 4h4v4M4 20L20 4M20 16v4h-4M15 15l5 5M4 4l5 5',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   pot: 'M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM2 10h20M9 6.5c0-1 1-1.5 1-2.5M14 6.5c0-1 1-1.5 1-2.5',
 };
@@ -133,4 +134,34 @@ export function Stars({ value = 0, onChange, size = 22 }) {
 
 export function Check({ on }) {
   return <span className={`check ${on ? 'on' : ''}`}>{on && <Icon name="check" size={14} stroke={3} />}</span>;
+}
+
+// ── Macros ──────────────────────────────────────────────────────────────────
+const MACROS = [['kcal', 'Calories', ''], ['protein', 'Protein', 'g'], ['carbs', 'Carbs', 'g'], ['fat', 'Fat', 'g']];
+
+/** Compact one-liner, e.g. "620 kcal  38 g protein" */
+export function MacroLine({ m, className = 'macro-line' }) {
+  if (!m) return null;
+  return <span className={className}><b>{m.kcal}</b> kcal <span className="sep" /> <b>{m.protein} g</b> protein</span>;
+}
+
+/** Four bars against a per-meal target. Protein bar is good when full; fat/kcal turn warm when over. */
+export function MacroBars({ m, t }) {
+  return (
+    <div className="macro-bars">
+      {MACROS.map(([k, label, unit]) => {
+        const v = m?.[k] ?? 0, goal = t?.[k] || 0;
+        const pct = goal ? Math.min(100, (v / goal) * 100) : 0;
+        const over = goal && v > goal * 1.15 && k !== 'protein';
+        const good = k === 'protein' ? v >= goal * 0.9 : goal && Math.abs(v - goal) <= goal * 0.15;
+        return (
+          <div key={k} className="mb">
+            <div className="mb-top"><span>{label}</span><b>{v}{unit && ` ${unit}`}</b></div>
+            <div className="mb-bar"><div className={over ? 'over' : good ? 'good' : ''} style={{ width: `${pct}%` }} /></div>
+            {goal > 0 && <div className="mb-goal">of {goal}{unit && ` ${unit}`}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from './App.jsx';
-import { Icon, Logo, Photo, Sheet, Stars, Check } from './ui.jsx';
+import { Icon, Logo, Photo, Sheet, Stars, Check, MacroBars, MacroLine } from './ui.jsx';
+import { macrosOf } from './lib/nutrition.js';
+import { mealTarget } from './lib/planner.js';
 import { CATEGORIES, ymd, addDays, today, dayLabel, dateShort, shopGroup, SHOP_ORDER, hashKey } from './lib/util.js';
 import { scaleIngredient } from './lib/parse.js';
 
@@ -27,6 +29,8 @@ export function Library() {
       words.every((w) => (r.title + ' ' + (r.ingredients || []).join(' ')).toLowerCase().includes(w)));
     if (sort === 'az') l = [...l].sort((a, b) => a.title.localeCompare(b.title));
     if (sort === 'rating') l = [...l].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    if (sort === 'protein') l = [...l].sort((a, b) => (macrosOf(b)?.protein || 0) - (macrosOf(a)?.protein || 0));
+    if (sort === 'light') l = [...l].sort((a, b) => (macrosOf(a)?.kcal || 9999) - (macrosOf(b)?.kcal || 9999));
     return l;
   }, [recipes, q, cat, favOnly, sort]);
 
@@ -96,7 +100,7 @@ export function Library() {
                 <span className="spacer" />
                 <select className="select" style={{ width: 'auto', minHeight: 38, padding: '6px 34px 6px 12px', fontSize: 14, backgroundPosition: 'calc(100% - 18px) 16px, calc(100% - 13px) 16px' }}
                   value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
-                  <option value="new">Newest first</option><option value="az">A to Z</option><option value="rating">Best rated</option>
+                  <option value="new">Newest first</option><option value="az">A to Z</option><option value="rating">Best rated</option><option value="protein">Most protein</option><option value="light">Fewest calories</option>
                 </select>
               </div>
               {!list.length ? <div className="empty">No recipes match. Try another word or category.</div> : (
@@ -116,6 +120,7 @@ export function Library() {
                           {timeOf(r) ? <span className="row" style={{ gap: 4 }}><Icon name="clock" size={14} />{timeOf(r)}</span> : <span>{r.category}</span>}
                           {r.rating > 0 && <span className="star">★ {r.rating}</span>}
                         </div>
+                        {macrosOf(r) && <div className="m" style={{ marginTop: 3 }}><MacroLine m={macrosOf(r)} /></div>}
                       </div>
                     </div>
                   ))}
@@ -172,6 +177,8 @@ export function RecipeView({ id }) {
           <button onClick={() => go({ name: 'edit', id: r.id })}><Icon name="edit" />Edit</button>
         </div>
 
+        <RecipeMacros r={r} />
+
         <div className="r-section">
           <h2 className="serif">Ingredients</h2>
           <span className="stepper" aria-label="Servings">
@@ -213,6 +220,33 @@ export function RecipeView({ id }) {
           }}><Icon name="trash" /> Delete recipe</button>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+function RecipeMacros({ r }) {
+  const { targets, personIdx, setPersonIdx, go } = useApp();
+  const m = macrosOf(r);
+  if (!m) return (
+    <button className="macro-card small muted" style={{ textAlign: 'left', width: '100%' }} onClick={() => go({ name: 'edit', id: r.id })}>
+      No macros yet. Add amounts to the ingredients (like "200 g") or enter the macros under Edit.
+    </button>
+  );
+  const t = mealTarget(targets, personIdx);
+  const src = m.source === 'site' ? 'From the recipe website' : m.source === 'manual' ? 'Entered by you'
+    : `Estimated from ${m.matched} of ${m.total} ingredients. Enter exact values under Edit.`;
+  return (
+    <div className="macro-card">
+      <div className="head">
+        <b>Per serving</b>
+        {targets.people.length > 1 ? (
+          <span className="person-seg">
+            {targets.people.map((p, i) => <button key={i} className={personIdx === i ? 'on' : ''} onClick={() => setPersonIdx(i)}>{p.name}</button>)}
+          </span>
+        ) : <span className="small muted">vs. dinner target</span>}
+      </div>
+      <MacroBars m={m} t={t} />
+      <div className="macro-src">{src}</div>
     </div>
   );
 }
@@ -299,9 +333,10 @@ export function Planner() {
           <h1 className="serif">Planner</h1>
           <div className="sub">{plannedCount ? `${plannedCount} of the next 14 days planned` : 'Nothing planned yet'}</div>
         </div>
-        <button className="btn sm outline" onClick={() => setPast(!past)}>{past ? 'Hide last week' : 'Last week'}</button>
+        <button className="btn sm primary" onClick={() => go({ name: 'weekplan' })}><Icon name="shuffle" size={16} /> Plan my week</button>
       </div>
       <div className="screen">
+        <button className="btn ghost sm" style={{ paddingLeft: 0 }} onClick={() => setPast(!past)}>{past ? 'Hide last week' : 'Show last week'}</button>
         {days.map((d) => {
           const key = ymd(d);
           const ids = (plan[key] || []).filter((x) => byId[x]);
@@ -314,7 +349,10 @@ export function Planner() {
                 {ids.map((rid) => (
                   <div key={rid} className="planned">
                     <Photo src={photoOf(byId[rid])} iconSize={18} />
-                    <button className="t" onClick={() => go({ name: 'recipe', id: rid })}>{byId[rid].title}</button>
+                    <button className="t" style={{ display: 'block' }} onClick={() => go({ name: 'recipe', id: rid })}>
+                      <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{byId[rid].title}</span>
+                      {macrosOf(byId[rid]) && <MacroLine m={macrosOf(byId[rid])} />}
+                    </button>
                     <button className="icon-btn" style={{ width: 38, height: 38, background: 'transparent', borderColor: 'transparent' }}
                       onClick={() => planRemove(key, rid)} aria-label={`Remove ${byId[rid].title}`}>
                       <Icon name="x" size={18} />

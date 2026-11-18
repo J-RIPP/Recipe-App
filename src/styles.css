@@ -257,3 +257,44 @@ img { display: block; }
 .logo { width: 40px; height: 40px; flex-shrink: 0; }
 .auth { min-height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 32px 22px; max-width: 440px; margin: 0 auto; }
 .auth h1 { font-size: 42px; line-height: 1.05; }
+
+/* ── Macros ── */
+.macro-line { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.macro-line b { color: var(--text); font-weight: 600; }
+.macro-line .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint); margin: 0 3px; }
+.macro-card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg); padding: 14px 14px 12px; }
+.macro-card .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.macro-card .head b { font-size: 15px; flex: 1; }
+.macro-bars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.mb-top { display: flex; flex-direction: column; gap: 0; }
+.mb-top span { font-size: 12.5px; color: var(--muted); }
+.mb-top b { font-size: 17px; font-weight: 700; }
+.mb-bar { height: 6px; background: var(--bg-2); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.mb-bar > div { height: 100%; background: var(--muted); border-radius: 3px; }
+.mb-bar > div.good { background: var(--leaf); }
+.mb-bar > div.over { background: var(--saffron); }
+.mb-goal { font-size: 12px; color: var(--faint); margin-top: 4px; }
+.macro-src { font-size: 12.5px; color: var(--faint); margin-top: 10px; }
+.person-seg { display: inline-flex; gap: 4px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.person-seg button { padding: 4px 10px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.person-seg button.on { background: var(--raised); color: var(--text); }
+.fit-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--faint); }
+.fit-dot.good { background: var(--leaf); }
+.fit-dot.ok { background: var(--saffron); }
+.fit-dot.off { background: var(--danger); }
+
+/* ── Week plan ── */
+.wp-day { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); align-items: center; }
+.wp-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-md); padding: 6px; min-width: 0; }
+.wp-row .ph { width: 56px; height: 56px; border-radius: 10px; flex-shrink: 0; }
+.wp-row .info { flex: 1; min-width: 0; }
+.wp-row .t { font-weight: 600; font-size: 15px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wp-row.locked { background: transparent; border-style: dashed; }
+.wp-row.empty { background: transparent; border-style: dashed; color: var(--muted); padding: 14px 12px; font-size: 14px; }
+.sticky-bar { position: sticky; bottom: 0; margin: 16px -18px -36px; padding: 12px 18px 18px; background: linear-gradient(transparent, var(--bg) 22%); display: flex; gap: 10px; }
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.opt-row > span { font-weight: 600; font-size: 15px; }
+.opt-row > span em { display: block; font-style: normal; font-weight: 400; font-size: 13px; color: var(--faint); }
+.wp-row .info { overflow: hidden; }
+.wp-row .macro-line, .planned .macro-line { white-space: normal; flex-wrap: wrap; row-gap: 0; }
+.wp-row .icon-btn { width: 38px !important; height: 38px !important; }

@@ -107,6 +107,11 @@ export function parseRecipeHtml(html, url = '') {
     if (!title) return null;
     return { title, photo_url: metaContent(html, 'og:image'), source_url: url, ingredients: [], steps: [], partial: true };
   }
+  const n = node.nutrition || {};
+  const num = (v) => { const m = String(v ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/); return m ? Math.round(parseFloat(m[0])) : 0; };
+  let kcal = num(n.calories);
+  if (/kj/i.test(String(n.calories || '')) && !/kcal/i.test(String(n.calories))) kcal = Math.round(kcal / 4.184);
+  const macros = kcal > 0 ? { kcal, protein: num(n.proteinContent), carbs: num(n.carbohydrateContent), fat: num(n.fatContent), source: 'site' } : null;
   const cat = [node.recipeCategory, node.keywords, node.name].flat().filter(Boolean).join(' ');
   let photo = pickImage(node.image) || metaContent(html, 'og:image');
   if (photo && url && photo.startsWith('/')) { try { photo = new URL(photo, url).href; } catch { /* keep */ } }
@@ -120,6 +125,7 @@ export function parseRecipeHtml(html, url = '') {
     servings: parseYield(node.recipeYield),
     prep_time: isoDuration(node.prepTime),
     cook_time: isoDuration(node.cookTime || node.totalTime),
+    ...(macros ? { macros } : {}),
   };
 }
 
