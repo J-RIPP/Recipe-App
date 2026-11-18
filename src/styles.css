@@ -404,3 +404,18 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
 details.more summary { cursor: pointer; font-weight: 650; color: var(--leaf); list-style: none; display: flex; align-items: center; gap: 6px; min-height: 40px; }
 details.more summary::-webkit-details-marker { display: none; }
 details.more[open] summary svg { transform: rotate(90deg); }
+
+/* ── Review pass ── */
+.cook .sheet { color: var(--text); }
+.cook .sheet .icon-btn { background: var(--surface); border-color: var(--line); color: var(--text); }
+.timer { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 10px 10px 16px; border-radius: 999px; background: rgba(255, 255, 255, .1); }
+.timer .tt { font-family: var(--serif); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.timer.done { background: var(--saffron); color: var(--text); animation: pulse 1s ease-in-out infinite; }
+.timer.done .btn { background: var(--surface); color: var(--text); border-color: transparent; }
+@keyframes pulse { 50% { transform: scale(1.03); } }
+.cook .timer-btn { align-self: flex-start; margin-top: 22px; }
+.rcard .macro-line { font-size: 12px; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+.wp-row .macro-line, .planned .macro-line { font-size: 12.5px; }
+.rate-hint { font-size: 13px; color: var(--faint); margin-left: 6px; }
+.quick button:disabled { opacity: .4; }
+.wp-row .macro-line { flex-wrap: nowrap; white-space: nowrap; }

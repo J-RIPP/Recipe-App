@@ -4,7 +4,7 @@ import { Icon, Photo, Sheet, Stars, Check, MacroBars, MacroLine, introWillPlay }
 import { macrosOf } from './lib/nutrition.js';
 import { mealTarget } from './lib/planner.js';
 import { t } from './lib/i18n.js';
-import { CATEGORIES, ymd, addDays, today, dayLabel, dateShort, shopGroup, SHOP_ORDER, hashKey } from './lib/util.js';
+import { stepMinutes, CATEGORIES, ymd, addDays, today, dayLabel, dateShort, shopGroup, SHOP_ORDER, hashKey } from './lib/util.js';
 import { scaleIngredient } from './lib/parse.js';
 
 const photoOf = (r) => r?.photo || r?.photo_url;
@@ -65,7 +65,7 @@ export function Home({ setTab }) {
       ['Packed with protein', withM.filter(([, m]) => m && m.protein >= 25).sort((a, b) => b[1].protein - a[1].protein).map(([r]) => r)],
       ['Ready in 30 minutes', recipes.filter((r) => { const t = minutesOf(r.cook_time) || minutesOf(r.prep_time); return t && t <= 30; })],
       ['Recently added', recipes.slice(0, 8)],
-    ].filter(([, l]) => l.length);
+    ].filter(([, l]) => l.length).slice(0, 3);
   }, [recipes]);
 
   const surprise = () => {
@@ -121,13 +121,13 @@ export function Home({ setTab }) {
             )}
 
           <div className="quick">
-            <button onClick={() => go({ name: 'weekplan' })}><span className="qi green"><Icon name="shuffle" size={24} /></span>{t("Plan my week")}</button>
+            <button onClick={() => go({ name: 'weekplan' })} disabled={recipes.length < 2}><span className="qi green"><Icon name="shuffle" size={24} /></span>{t("Plan my week")}</button>
             <button onClick={surprise} disabled={!recipes.length}><span className="qi gold"><Icon name="dice" size={24} /></span>{t("Surprise me")}</button>
             <button onClick={() => setTab('shop')}><span className="qi sage"><Icon name="cart" size={24} />{toBuy > 0 && <span className="badge">{toBuy}</span>}</span>{t("Shopping")}</button>
             <button onClick={() => go({ name: 'add' })}><span className="qi berry"><Icon name="plus" size={24} /></span>{t("Add recipe")}</button>
           </div>
 
-          <div className="home-sec">
+          {recipes.length > 0 && <div className="home-sec">
             <div className="home-sec-h"><h2 className="serif">{t("This week")}</h2><button onClick={() => setTab('plan')}>{t("Planner")}</button></div>
             <div className="week">
               {week.map((d, i) => {
@@ -141,7 +141,7 @@ export function Home({ setTab }) {
                 );
               })}
             </div>
-          </div>
+          </div>}
 
           {rails.map(([title, list]) => (
             <div key={title} className="home-sec">
@@ -229,7 +229,7 @@ export function Library() {
 
 // ── Recipe detail ───────────────────────────────────────────────────────────
 export function RecipeView({ id }) {
-  const { byId, back, go, update, deleteRecipe, shopAdd, toast } = useApp();
+  const { byId, back, go, update, deleteRecipe, shopAdd, shopping, toast } = useApp();
   const r = byId[id];
   const [servings, setServings] = useState(r?.servings || 2);
   const [done, setDone] = useState({});
@@ -262,11 +262,19 @@ export function RecipeView({ id }) {
           {r.cook_time && <span className="tag"><Icon name="pot" size={14} /> {r.cook_time}</span>}
         </div>
         <h1 className="serif r-title">{r.title}</h1>
-        <Stars value={r.rating || 0} onChange={(v) => update(r.id, { rating: v })} size={24} />
+        <div className="row" style={{ gap: 0 }}>
+          <Stars value={r.rating || 0} onChange={(v) => update(r.id, { rating: v })} size={24} />
+          {!r.rating && <span className="rate-hint">{t('Tap a star to rate')}</span>}
+        </div>
         <div className="actions">
           <button className="primary" onClick={() => go({ name: 'cook', id: r.id, servings })} disabled={!r.steps?.length}><Icon name="play" size={20} />{t("Start cooking")}</button>
           <button onClick={() => setSheet('plan')}><Icon name="cal" />{t("Plan")}</button>
-          <button onClick={() => { shopAdd(ings); toast(t('Added {n} items to the shopping list', { n: ings.length })); }} disabled={!ings.length}><Icon name="cart" />{t('Shopping list')}</button>
+          <button onClick={() => {
+            const have = new Set(shopping.filter((x) => x.manual && !x.ticked).map((x) => x.text.toLowerCase().trim()));
+            const fresh = ings.filter((x) => !have.has(x.toLowerCase().trim()));
+            if (fresh.length) shopAdd(fresh);
+            toast(fresh.length ? t('Added {n} items to the shopping list', { n: fresh.length }) : t('Already on your list'));
+          }} disabled={!ings.length}><Icon name="cart" />{t('Shopping list')}</button>
           <button onClick={() => go({ name: 'edit', id: r.id })}><Icon name="edit" />{t("Edit")}</button>
         </div>
 
@@ -366,20 +374,49 @@ function PlanSheet({ recipe, onClose }) {
 }
 
 // ── Cook mode ───────────────────────────────────────────────────────────────
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.35, 0.7].forEach((d) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.25, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + d + 0.3);
+      o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + 0.3);
+    });
+  } catch { /* no audio */ }
+  navigator.vibrate?.([300, 150, 300, 150, 300]);
+}
+
+const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
 export function Cook({ id, servings }) {
   const { byId, back } = useApp();
   const r = byId[id];
   const [i, setI] = useState(0);
   const [showIng, setShowIng] = useState(false);
+  const [timer, setTimer] = useState(null); // { end, mins, step }
+  const [now, setNow] = useState(Date.now());
+  const [rang, setRang] = useState(false);
   useEffect(() => {
     let lock;
     navigator.wakeLock?.request('screen').then((l) => { lock = l; }).catch(() => {});
     return () => { lock?.release().catch(() => {}); };
   }, []);
+  useEffect(() => {
+    if (!timer) return;
+    const iv = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(iv);
+  }, [timer]);
+  useEffect(() => {
+    if (timer && !rang && now >= timer.end) { setRang(true); beep(); }
+  }, [now, timer, rang]);
   if (!r) return null;
   const steps = r.steps || [];
   const factor = (servings || r.servings || 2) / (r.servings || 2);
   const last = i >= steps.length - 1;
+  const mins = stepMinutes(steps[i]);
+  const left = timer ? timer.end - now : 0;
+  const startTimer = (m) => { setTimer({ end: Date.now() + m * 60000, mins: m, step: i }); setRang(false); setNow(Date.now()); };
   return (
     <div className="cook">
       <div className="row" style={{ gap: 12 }}>
@@ -390,9 +427,21 @@ export function Cook({ id, servings }) {
         </div>
         <button className="btn sm" onClick={() => setShowIng(true)}><Icon name="list" size={18} /> {t("Ingredients")}</button>
       </div>
-      <div className="cook-step" onClick={(e) => { if (e.clientX > window.innerWidth / 2) { if (!last) setI(i + 1); } else if (i > 0) setI(i - 1); }}>
+      {timer && (
+        <div className={`timer ${left <= 0 ? 'done' : ''}`} role="timer">
+          <Icon name="clock" size={20} />
+          <span className="tt">{left > 0 ? mmss(left) : t('Time is up!')}</span>
+          <span className="small" style={{ opacity: .8 }}>{t('Step {n}', { n: timer.step + 1 })}</span>
+          <span className="spacer" />
+          <button className="btn sm" onClick={() => setTimer(null)}>{left > 0 ? t('Stop') : t('OK')}</button>
+        </div>
+      )}
+      <div className="cook-step" onClick={(e) => { if (e.target.closest('button')) return; if (e.clientX > window.innerWidth / 2) { if (!last) setI(i + 1); } else if (i > 0) setI(i - 1); }}>
         <div className="n">{t('Step {a} of {b}', { a: i + 1, b: steps.length })}</div>
-        <p>{steps[i]}</p>
+        <p key={i}>{steps[i]}</p>
+        {mins && (!timer || timer.step !== i) && (
+          <button className="btn timer-btn" onClick={() => startTimer(mins)}><Icon name="clock" size={18} /> {t('Start a {n} min timer', { n: mins })}</button>
+        )}
         {i === 0 && <div className="hint">{t("Tap the right side for the next step, the left side to go back. The screen stays on.")}</div>}
       </div>
       <div className="grid2">
@@ -402,7 +451,7 @@ export function Cook({ id, servings }) {
       </div>
       {showIng && (
         <Sheet title={t("Ingredients")} onClose={() => setShowIng(false)}>
-          <ul className="ing">{(r.ingredients || []).map((t, k) => <li key={k} style={{ cursor: 'default' }}>{scaleIngredient(t, factor)}</li>)}</ul>
+          <ul className="ing">{(r.ingredients || []).map((x, k) => <li key={k} style={{ cursor: 'default' }}>{scaleIngredient(x, factor)}</li>)}</ul>
         </Sheet>
       )}
     </div>

@@ -55,3 +55,12 @@ test('ingredient estimates', () => {
   assert.equal(m.matched, 3);
   assert.equal(nextDates(new Date(2026, 10, 20), 2)[1], '2026-11-21');
 });
+
+import { stepMinutes } from '../src/lib/util.js';
+test('timer durations found in steps', () => {
+  assert.equal(stepMinutes('Laat 10 minuten sudderen.'), 10);
+  assert.equal(stepMinutes('Bak 20-25 min in de oven'), 25);
+  assert.equal(stepMinutes('Simmer for 1 hour'), 60);
+  assert.equal(stepMinutes('Voeg 2 uien toe'), null);
+  assert.equal(stepMinutes('Bake for 15 minutes until golden'), 15);
+});

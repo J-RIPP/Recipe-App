@@ -319,6 +319,13 @@ export const NL = {
   'from the recipe website': 'van de receptenwebsite',
   'entered by you': 'zelf ingevuld',
   'leave empty to estimate from the ingredients': 'leeg laten om te schatten uit de ingrediënten',
+  'Time is up!': 'De tijd is om!',
+  'Step {n}': 'Stap {n}',
+  'Stop': 'Stop',
+  'OK': 'OK',
+  'Start a {n} min timer': 'Start een timer van {n} min',
+  'Tap a star to rate': 'Tik op een ster om te beoordelen',
+  'Already on your list': 'Staat al op je lijst',
   // days & months
   Sun: 'zo', Mon: 'ma', Tue: 'di', Wed: 'wo', Thu: 'do', Fri: 'vr', Sat: 'za',
   Sunday: 'Zondag', Monday: 'Maandag', Tuesday: 'Dinsdag', Wednesday: 'Woensdag', Thursday: 'Donderdag', Friday: 'Vrijdag', Saturday: 'Zaterdag',

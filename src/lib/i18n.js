@@ -3,7 +3,7 @@ import { NL } from './nl.js';
 
 const KEY = 'or.lang';
 export const getLang = () => {
-  try { return localStorage.getItem(KEY) || (navigator.language?.toLowerCase().startsWith('nl') ? 'nl' : 'en'); } catch { return 'en'; }
+  try { return localStorage.getItem(KEY) || 'en'; } catch { return 'en'; }
 };
 let lang = typeof localStorage !== 'undefined' ? getLang() : 'en';
 export function setLang(l) { localStorage.setItem(KEY, l); location.reload(); }

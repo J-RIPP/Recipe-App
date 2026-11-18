@@ -112,7 +112,7 @@ export function AddScreen() {
 
 // ── Editor ──────────────────────────────────────────────────────────────────
 export function Editor({ id, draft, note }) {
-  const { byId, back, replace, saveRecipe, toast } = useApp();
+  const { byId, back, replace, saveRecipe, deleteRecipe, toast } = useApp();
   const existing = id ? byId[id] : null;
   const initial = existing || draft || {};
   const [f, setF] = useState(() => ({
@@ -243,6 +243,11 @@ export function Editor({ id, draft, note }) {
         <label className="field"><span>{t("Original recipe link")} <em>{t("optional")}</em></span><input className="input" inputMode="url" value={f.source_url} onChange={set('source_url')} placeholder="https://" /></label>
         <label className="field"><span>{t("Notes")} <em>{t("optional")}</em></span><textarea className="textarea" style={{ minHeight: 80 }} value={f.notes} onChange={set('notes')} /></label>
         <button className="btn primary block" onClick={save} disabled={saving}>{existing ? t('Save changes') : t('Add recipe')}</button>
+        {existing && (
+          <button className="btn danger block" onClick={() => {
+            const undo = deleteRecipe(existing); back(); back(); toast(t('Recipe deleted'), { label: t('Undo'), run: undo });
+          }}><Icon name="trash" size={18} /> {t('Delete recipe')}</button>
+        )}
       </div>
     </>
   );
@@ -342,7 +347,7 @@ export function Settings() {
       <div className="screen no-nav stack" style={{ paddingTop: 16 }}>
         <div className="card stack">
           <div className="row">
-            <span className="icon-btn on" style={{ borderColor: 'transparent' }}><Icon name="cloud" /></span>
+            <span className="icon-btn" style={{ borderColor: 'transparent', background: 'var(--sage-soft)', color: 'var(--leaf)' }}><Icon name="cloud" /></span>
             <div style={{ flex: 1 }}>
               <b>{db.kind === 'firebase' ? t('Synced') : t('This phone only')}</b>
               <div className="small muted">{db.kind === 'firebase' ? `${user.email} · ${db.projectId}` : t('Recipes are not shared yet')}</div>

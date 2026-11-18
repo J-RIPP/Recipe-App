@@ -89,3 +89,13 @@ export function hashKey(s) {
   for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
   return 't' + (h >>> 0).toString(36);
 }
+
+// Finds a duration in a step ("10 minuten", "1 uur", "20-25 min") → minutes
+export function stepMinutes(step = '') {
+  const m = step.match(/(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|tot|to)\s*(\d+(?:[.,]\d+)?))?\s*(minuten|minuut|minutes?|mins?|min\.?|uur|hours?|hrs?|u)\b/i);
+  if (!m) return null;
+  const n = parseFloat((m[2] || m[1]).replace(',', '.'));
+  const mins = /^(uur|hours?|hrs?|u)$/i.test(m[3]) ? n * 60 : n;
+  return mins >= 1 && mins <= 600 ? Math.round(mins) : null;
+}
+

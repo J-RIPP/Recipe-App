@@ -177,7 +177,7 @@ function Main({ db, user }) {
       )}
       <Intro />
       {toastMsg && (
-        <div className="toast" role="status" style={showNav ? null : { bottom: 24 }}>
+        <div className="toast" role="status" style={showNav ? null : { bottom: 92 }}>
           {toastMsg.text}
           {toastMsg.action && <button className="toast-action" onClick={() => { toastMsg.action.run(); setToastMsg(''); }}>{toastMsg.action.label}</button>}
         </div>
